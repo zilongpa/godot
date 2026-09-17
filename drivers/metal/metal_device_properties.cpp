@@ -164,6 +164,10 @@ void MetalDeviceProperties::init_features(MTL::Device *p_device) {
 		features.supports_native_image_atomics = false;
 	}
 
+#ifdef VISIONOS_SIMULATOR
+	// Simulator advertises the OS API but cannot use residency sets reliably.
+	features.supports_residency_sets = false;
+#else
 	if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
 		features.supports_residency_sets = false;
 	} else if (__builtin_available(macOS 15.0, iOS 18.0, tvOS 18.0, visionOS 2.0, *)) {
@@ -171,6 +175,8 @@ void MetalDeviceProperties::init_features(MTL::Device *p_device) {
 	} else {
 		features.supports_residency_sets = false;
 	}
+
+#endif
 
 	if (__builtin_available(macOS 13.0, iOS 16.0, tvOS 16.0, *)) {
 		features.needs_arg_encoders = !(p_device->supportsFamily(MTL::GPUFamilyMetal3) && features.argument_buffers_tier == MTL::ArgumentBuffersTier2);

@@ -1061,7 +1061,12 @@ public:
 		_FORCE_INLINE_ void apply(T *p_enc) const {
 			p_enc->setCullMode(cull_mode);
 			p_enc->setTriangleFillMode(fill_mode);
+#ifndef VISIONOS_SIMULATOR
 			p_enc->setDepthClipMode(clip_mode);
+#else
+			// The simulator rejects setDepthClipMode under Metal API validation.
+			// Keep its default clipping behavior; depth clamping is unavailable here.
+#endif
 			p_enc->setFrontFacingWinding(winding);
 			depth_bias.apply(p_enc);
 			stencil.apply(p_enc);

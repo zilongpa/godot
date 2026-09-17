@@ -2541,7 +2541,7 @@ Error RenderingDeviceDriverMetal::_copy_queue_initialize() {
 	copy_queue_buffer.get()->setLabel(MTLSTR("Copy Command Scratch Buffer"));
 
 	if (__builtin_available(macOS 15.0, iOS 18.0, tvOS 18.0, visionOS 1.0, *)) {
-		if (!OS::get_singleton()->get_processor_name().contains("Virtual")) {
+		if (device_properties->features.supports_residency_sets) {
 			MTL::ResidencySetDescriptor *rs_desc = MTL::ResidencySetDescriptor::alloc()->init();
 			rs_desc->setInitialCapacity(2);
 			rs_desc->setLabel(MTLSTR("Copy Queue Residency Set"));
@@ -2923,12 +2923,12 @@ Error RenderingDeviceDriverMetal::_initialize(uint32_t p_device_index, uint32_t 
 	}
 
 	// The Metal renderer requires Apple4 family. This is 2017 era A11 chips and newer.
-	bool skip_simulator_gpu_check = false;
 #ifdef VISIONOS_SIMULATOR
-	skip_simulator_gpu_check = OS::get_singleton()->get_environment("GDRK_SIMULATOR_SKIP_GPU_CHECK") == "1";
-	if (skip_simulator_gpu_check) {
-		WARN_PRINT("Experimental simulator mode: skipping the Apple4 GPU check; reported device capabilities remain unchanged.");
-	}
+	// Simulator reports Apple2 even on newer hosts. Allow startup by default;
+	// unsupported simulator operations are handled separately without spoofing GPU features.
+	const bool skip_simulator_gpu_check = true;
+#else
+	const bool skip_simulator_gpu_check = false;
 #endif
 	if (!skip_simulator_gpu_check && device_properties->features.highestFamily < MTL::GPUFamilyApple4) {
 		String error_string = vformat("Your Apple GPU does not support the following features, which are required to use Metal-based renderers in Godot:\n\n");

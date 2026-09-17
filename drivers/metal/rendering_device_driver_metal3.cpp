@@ -110,7 +110,7 @@ Error RenderingDeviceDriverMetal::initialize(uint32_t p_device_index, uint32_t p
 	// and can only be enabled via an environment variable.
 	bool barriers_enabled = OS::get_singleton()->get_environment("GODOT_MTL_FORCE_BARRIERS") == "1";
 	if (__builtin_available(macos 26.0, ios 26.0, tvos 26.0, visionos 26.0, *)) {
-		if (barriers_enabled) {
+		if (barriers_enabled && device_properties->features.supports_residency_sets) {
 			print_line("Metal 3: Resource barriers enabled.");
 			NS::SharedPtr<MTL::ResidencySetDescriptor> rs_desc = NS::TransferPtr(MTL::ResidencySetDescriptor::alloc()->init());
 			rs_desc->setInitialCapacity(250);
