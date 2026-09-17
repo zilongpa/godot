@@ -34,6 +34,14 @@
 #define MTLFX_PRIVATE_IMPLEMENTATION
 
 #include "Foundation/Foundation.hpp"
+#ifdef VISIONOS_SIMULATOR
+// The simulator Metal runtime omits some device-only constants. Use metal-cpp's
+// existing runtime lookup so absent optional symbols resolve to nullptr.
+#include "Metal/MTLPrivate.hpp"
+#undef _MTL_PRIVATE_DEF_CONST
+#define _MTL_PRIVATE_DEF_CONST(type, symbol) _MTL_PRIVATE_DEF_WEAK_CONST(type, symbol)
+#endif
+
 #include "Metal/Metal.hpp"
 #include "MetalFX/MetalFX.hpp"
 #include "QuartzCore/QuartzCore.hpp"

@@ -144,9 +144,8 @@ def configure(env: "SConsEnvironment"):
         print_warning("The visionOS platform does not support the Vulkan rendering driver")
         env["vulkan"] = False
 
-    if env["metal"] and env["simulator"]:
-        print_warning("visionOS Simulator does not support the Metal rendering driver")
-        env["metal"] = False
+    # RealityKit simulator builds still compile the XR/Metal integration.
+    # Keep the requested Metal backend enabled with the simulator SDK.
 
     if env["metal"]:
         env.AppendUnique(CPPDEFINES=["METAL_ENABLED", "RD_ENABLED"])

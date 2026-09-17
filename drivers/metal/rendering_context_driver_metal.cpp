@@ -226,11 +226,16 @@ public:
 		count--;
 		front = (front + 1) % frame_buffers.size();
 
+#ifdef VISIONOS_SIMULATOR
+		// MTLSimCommandBuffer does not implement afterMinimumDuration:.
+		p_cmd_buffer->get_command_buffer()->presentDrawable(drawable);
+#else
 		if (vsync_mode != DisplayServerEnums::VSYNC_DISABLED) {
 			p_cmd_buffer->get_command_buffer()->presentDrawableAfterMinimumDuration(drawable, present_minimum_duration);
 		} else {
 			p_cmd_buffer->get_command_buffer()->presentDrawable(drawable);
 		}
+#endif
 	}
 
 	MTL::Drawable *next_drawable() override final {
