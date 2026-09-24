@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  apple_embedded.h                                                      */
+/*  file_access_apple_embedded.h                                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -30,32 +30,24 @@
 
 #pragma once
 
-#include "core/object/object.h"
+#include "drivers/unix/file_access_unix.h"
+#import <Foundation/Foundation.h>
 
-#import <CoreHaptics/CoreHaptics.h>
-
-class AppleEmbedded : public Object {
-	GDCLASS(AppleEmbedded, Object);
-
-	static void _bind_methods();
-
-private:
-	CHHapticEngine *haptic_engine API_AVAILABLE(ios(13)) = nullptr;
-
-	CHHapticEngine *get_haptic_engine_instance() API_AVAILABLE(ios(13));
-	void start_haptic_engine();
-	void stop_haptic_engine();
+class FileAccessAppleEmbedded : public FileAccessUnix {
+	NSURL *document_url = nil;
+	bool scoped = false;
+	mutable Error coordination_error = OK;
+	void coordinate(void (^p_read)(NSURL *)) const;
 
 public:
-	static void alert(const char *p_alert, const char *p_title);
-
-	bool supports_haptic_engine();
-	void vibrate_haptic_engine(float p_duration_seconds, float p_amplitude);
-
-	String get_model() const;
-	String get_rate_url(int p_app_id) const;
-
-	void set_native_dialog_host_callbacks(const Callable &p_get_host, const Callable &p_finished);
-
-	AppleEmbedded();
+	Error open_internal(const String &p_path, int p_mode_flags) override;
+	uint64_t get_buffer(uint8_t *p_dst, uint64_t p_length) const override;
+	uint64_t get_length() const override;
+	void seek_end(int64_t p_position = 0) override;
+	Error get_error() const override;
+	bool file_exists(const String &p_path) override;
+	int64_t _get_size(const String &p_path) override;
+	uint64_t _get_modified_time(const String &p_path) override;
+	void close() override;
+	~FileAccessAppleEmbedded() override;
 };

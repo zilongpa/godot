@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #import "os_apple_embedded.h"
+#include "file_access_apple_embedded.h"
 
 #ifdef APPLE_EMBEDDED_ENABLED
 
@@ -167,6 +168,9 @@ void OS_AppleEmbedded::alert(const String &p_alert, const String &p_title) {
 
 void OS_AppleEmbedded::initialize_core() {
 	OS_Unix::initialize_core();
+#ifdef VISIONOS_ENABLED
+	FileAccess::make_default<FileAccessAppleEmbedded>(FileAccess::ACCESS_FILESYSTEM);
+#endif
 }
 
 void OS_AppleEmbedded::initialize() {

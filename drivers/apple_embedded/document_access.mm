@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  apple_embedded.h                                                      */
+/*  document_access.mm                                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,34 +28,57 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
+#import "document_access.h"
+#include <stdio.h>
+#include <sys/stat.h>
 
-#include "core/object/object.h"
-
-#import <CoreHaptics/CoreHaptics.h>
-
-class AppleEmbedded : public Object {
-	GDCLASS(AppleEmbedded, Object);
-
-	static void _bind_methods();
-
-private:
-	CHHapticEngine *haptic_engine API_AVAILABLE(ios(13)) = nullptr;
-
-	CHHapticEngine *get_haptic_engine_instance() API_AVAILABLE(ios(13));
-	void start_haptic_engine();
-	void stop_haptic_engine();
-
-public:
-	static void alert(const char *p_alert, const char *p_title);
-
-	bool supports_haptic_engine();
-	void vibrate_haptic_engine(float p_duration_seconds, float p_amplitude);
-
-	String get_model() const;
-	String get_rate_url(int p_app_id) const;
-
-	void set_native_dialog_host_callbacks(const Callable &p_get_host, const Callable &p_finished);
-
-	AppleEmbedded();
-};
+@implementation GodotDocumentAccess
++ (NSMutableDictionary<NSString *, NSURL *> *)grants {
+	static NSMutableDictionary<NSString *, NSURL *> *grants;
+	static dispatch_once_t once;
+	dispatch_once(&once, ^{ grants = [NSMutableDictionary dictionary]; });
+	return grants;
+}
++ (NSURL *)URLForPath:(NSString *)path {
+	NSMutableDictionary *grants = [self grants];
+	@synchronized(grants) {
+		return grants[path.stringByStandardizingPath];
+	}
+}
++ (void)rememberURLs:(NSArray<NSURL *> *)urls {
+	NSMutableDictionary *grants = [self grants];
+	@synchronized(grants) {
+		for (NSURL *url in urls) {
+			grants[url.path.stringByStandardizingPath] = url;
+		}
+	}
+}
++ (BOOL)validateURL:(NSURL *)url error:(NSError **)error {
+	return [self validateURL:url coordinator:[[NSFileCoordinator alloc] initWithFilePresenter:nil] error:error];
+}
++ (BOOL)validateURL:(NSURL *)url coordinator:(NSFileCoordinator *)coordinator error:(NSError **)error {
+	if (!url.isFileURL) {
+		if (error) { *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadUnsupportedSchemeError userInfo:nil]; }
+		return NO;
+	}
+	BOOL scoped = [url startAccessingSecurityScopedResource];
+	__block BOOL readable = NO;
+	__block NSError *readError;
+	[coordinator coordinateReadingItemAtURL:url options:0 error:error byAccessor:^(NSURL *coordinatedURL) {
+		struct stat info;
+		if (stat(coordinatedURL.fileSystemRepresentation, &info) == 0 && S_ISREG(info.st_mode)) {
+			FILE *file = fopen(coordinatedURL.fileSystemRepresentation, "rb");
+			if (file) {
+				readable = YES;
+				fclose(file);
+			}
+		}
+		if (!readable) {
+			readError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoPermissionError userInfo:nil];
+		}
+	}];
+	if (scoped) { [url stopAccessingSecurityScopedResource]; }
+	if (readError && error && !*error) { *error = readError; }
+	return readable;
+}
+@end

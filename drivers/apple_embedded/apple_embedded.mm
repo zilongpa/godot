@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #import "apple_embedded.h"
+#include "native_file_dialog.h"
 
 #include "core/object/class_db.h"
 #import "drivers/apple_embedded/godot_app_delegate_service_apple_embedded.h"
@@ -39,6 +40,7 @@
 #include <sys/sysctl.h>
 
 void AppleEmbedded::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_native_dialog_host_callbacks", "get_host", "finished"), &AppleEmbedded::set_native_dialog_host_callbacks);
 	ClassDB::bind_method(D_METHOD("get_rate_url", "app_id"), &AppleEmbedded::get_rate_url);
 	ClassDB::bind_method(D_METHOD("supports_haptic_engine"), &AppleEmbedded::supports_haptic_engine);
 	ClassDB::bind_method(D_METHOD("start_haptic_engine"), &AppleEmbedded::start_haptic_engine);
@@ -199,3 +201,7 @@ String AppleEmbedded::get_rate_url(int p_app_id) const {
 }
 
 AppleEmbedded::AppleEmbedded() {}
+
+void AppleEmbedded::set_native_dialog_host_callbacks(const Callable &p_get_host, const Callable &p_finished) {
+	AppleNativeFileDialog::set_host_callbacks(p_get_host, p_finished);
+}

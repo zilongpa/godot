@@ -173,6 +173,10 @@ private:
 	static inline DisplayMode default_display_mode = DISPLAY_THUMBNAILS;
 	bool show_hidden_files = false;
 	bool use_native_dialog = false;
+	bool native_dialog_pending = false;
+	uint64_t native_dialog_generation = 0;
+	Callable native_dialog_callback;
+	void _cancel_native_dialog(bool p_notify);
 	bool can_create_folders = true;
 	bool customization_flags[CUSTOMIZATION_MAX]; // Initialized to true in the constructor.
 
@@ -359,8 +363,8 @@ private:
 	virtual void shortcut_input(const Ref<InputEvent> &p_event) override;
 
 	void _native_popup();
-	void _native_dialog_cb(bool p_ok, const Vector<String> &p_files, int p_filter);
-	void _native_dialog_cb_with_options(bool p_ok, const Vector<String> &p_files, int p_filter, const Dictionary &p_selected_options);
+	void _native_dialog_cb(bool p_ok, const Vector<String> &p_files, int p_filter, uint64_t p_generation);
+	void _native_dialog_cb_with_options(bool p_ok, const Vector<String> &p_files, int p_filter, const Dictionary &p_selected_options, uint64_t p_generation);
 
 	bool _is_open_should_be_disabled();
 	void _thumbnail_callback(const Ref<Texture2D> &p_texture, const String &p_path);

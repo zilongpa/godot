@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  apple_embedded.h                                                      */
+/*  document_access.h                                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -30,32 +30,13 @@
 
 #pragma once
 
-#include "core/object/object.h"
+#import <Foundation/Foundation.h>
 
-#import <CoreHaptics/CoreHaptics.h>
-
-class AppleEmbedded : public Object {
-	GDCLASS(AppleEmbedded, Object);
-
-	static void _bind_methods();
-
-private:
-	CHHapticEngine *haptic_engine API_AVAILABLE(ios(13)) = nullptr;
-
-	CHHapticEngine *get_haptic_engine_instance() API_AVAILABLE(ios(13));
-	void start_haptic_engine();
-	void stop_haptic_engine();
-
-public:
-	static void alert(const char *p_alert, const char *p_title);
-
-	bool supports_haptic_engine();
-	void vibrate_haptic_engine(float p_duration_seconds, float p_amplitude);
-
-	String get_model() const;
-	String get_rate_url(int p_app_id) const;
-
-	void set_native_dialog_host_callbacks(const Callable &p_get_host, const Callable &p_finished);
-
-	AppleEmbedded();
-};
+// Process-local grants. Retaining the original URL preserves its sandbox extension;
+// callers balance access for each open file. No imported copies or persistent bookmarks.
+@interface GodotDocumentAccess : NSObject
++ (NSURL *)URLForPath:(NSString *)path;
++ (void)rememberURLs:(NSArray<NSURL *> *)urls;
++ (BOOL)validateURL:(NSURL *)url error:(NSError **)error;
++ (BOOL)validateURL:(NSURL *)url coordinator:(NSFileCoordinator *)coordinator error:(NSError **)error;
+@end

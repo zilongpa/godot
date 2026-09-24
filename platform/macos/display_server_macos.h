@@ -72,6 +72,13 @@ class DisplayServerMacOS : public DisplayServerMacOSBase {
 	GDSOFTCLASS(DisplayServerMacOS, DisplayServerMacOSBase);
 
 public:
+	struct NativeFileDialog {
+		Callable callback;
+		NSSavePanel *panel = nil;
+	};
+	Vector<NativeFileDialog> native_file_dialogs;
+	void file_dialog_cancel(const Callable &p_callback) override;
+
 	struct KeyEvent {
 		DisplayServerEnums::WindowID window_id = DisplayServerEnums::INVALID_WINDOW_ID;
 		unsigned int macos_state = false;

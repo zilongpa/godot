@@ -68,6 +68,11 @@ void FileDialog::_focus_file_text() {
 }
 
 void FileDialog::_native_popup() {
+	if (native_dialog_pending) {
+		return;
+	}
+	native_dialog_pending = true;
+	const uint64_t generation = ++native_dialog_generation;
 	// Show native dialog directly.
 	String root;
 	if (!root_prefix.is_empty()) {
@@ -85,15 +90,22 @@ void FileDialog::_native_popup() {
 	}
 	DisplayServerEnums::WindowID wid = w ? w->get_window_id() : DisplayServerEnums::INVALID_WINDOW_ID;
 
+	Error err;
 	if (DisplayServer::get_singleton()->has_feature(DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_EXTRA)) {
-		DisplayServer::get_singleton()->file_dialog_with_options_show(get_displayed_title(), ProjectSettings::get_singleton()->globalize_path(full_dir), root, filename_edit->get_text().get_file(), show_hidden_files, DisplayServerEnums::FileDialogMode(mode), processed_filters, _get_options(), callable_mp(this, &FileDialog::_native_dialog_cb_with_options), wid);
+		native_dialog_callback = callable_mp(this, &FileDialog::_native_dialog_cb_with_options).bind(generation);
+		err = DisplayServer::get_singleton()->file_dialog_with_options_show(get_displayed_title(), ProjectSettings::get_singleton()->globalize_path(full_dir), root, filename_edit->get_text().get_file(), show_hidden_files, DisplayServerEnums::FileDialogMode(mode), processed_filters, _get_options(), native_dialog_callback, wid);
 	} else {
-		DisplayServer::get_singleton()->file_dialog_show(get_displayed_title(), ProjectSettings::get_singleton()->globalize_path(full_dir), filename_edit->get_text().get_file(), show_hidden_files, DisplayServerEnums::FileDialogMode(mode), processed_filters, callable_mp(this, &FileDialog::_native_dialog_cb), wid);
+		native_dialog_callback = callable_mp(this, &FileDialog::_native_dialog_cb).bind(generation);
+		err = DisplayServer::get_singleton()->file_dialog_show(get_displayed_title(), ProjectSettings::get_singleton()->globalize_path(full_dir), filename_edit->get_text().get_file(), show_hidden_files, DisplayServerEnums::FileDialogMode(mode), processed_filters, native_dialog_callback, wid);
+	}
+	if (err != OK) {
+		ERR_PRINT(vformat("Could not open native file dialog (error %d).", err));
+		callable_mp(this, &FileDialog::_native_dialog_cb).call_deferred(false, Vector<String>(), 0, generation);
 	}
 }
 
 bool FileDialog::_can_use_native_popup() const {
-	if (access == ACCESS_RESOURCES || access == ACCESS_USERDATA || options.size() > 0) {
+	if (access == ACCESS_RESOURCES || access == ACCESS_USERDATA || !root_prefix.is_empty() || options.size() > 0) {
 		return DisplayServer::get_singleton()->has_feature(DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_EXTRA);
 	}
 	return DisplayServer::get_singleton()->has_feature(DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE);
@@ -124,6 +136,9 @@ void FileDialog::_clear_changed_status() {
 }
 
 void FileDialog::set_visible(bool p_visible) {
+	if (!p_visible) {
+		_cancel_native_dialog(true);
+	}
 	if (p_visible) {
 		_update_option_controls();
 	}
@@ -144,12 +159,30 @@ void FileDialog::set_visible(bool p_visible) {
 	}
 }
 
-void FileDialog::_native_dialog_cb(bool p_ok, const Vector<String> &p_files, int p_filter) {
-	_native_dialog_cb_with_options(p_ok, p_files, p_filter, Dictionary());
+void FileDialog::_cancel_native_dialog(bool p_notify) {
+	if (!native_dialog_pending) {
+		return;
+	}
+	native_dialog_pending = false;
+	++native_dialog_generation;
+	DisplayServer::get_singleton()->file_dialog_cancel(native_dialog_callback);
+	native_dialog_callback = Callable();
+	if (p_notify) {
+		emit_signal(SNAME("canceled"));
+	}
 }
 
-void FileDialog::_native_dialog_cb_with_options(bool p_ok, const Vector<String> &p_files, int p_filter, const Dictionary &p_selected_options) {
-	if (!p_ok) {
+void FileDialog::_native_dialog_cb(bool p_ok, const Vector<String> &p_files, int p_filter, uint64_t p_generation) {
+	_native_dialog_cb_with_options(p_ok, p_files, p_filter, Dictionary(), p_generation);
+}
+
+void FileDialog::_native_dialog_cb_with_options(bool p_ok, const Vector<String> &p_files, int p_filter, const Dictionary &p_selected_options, uint64_t p_generation) {
+	if (!native_dialog_pending || p_generation != native_dialog_generation || is_queued_for_deletion()) {
+		return;
+	}
+	native_dialog_pending = false;
+	native_dialog_callback = Callable();
+	if (!p_ok || p_files.is_empty()) {
 		filename_edit->set_text("");
 		emit_signal(SNAME("canceled"));
 		return;
@@ -231,10 +264,13 @@ void FileDialog::_native_dialog_cb_with_options(bool p_ok, const Vector<String> 
 				f += "." + ext;
 			}
 			emit_signal(SNAME("file_selected"), f);
-		} else if ((mode == FILE_MODE_OPEN_ANY || mode == FILE_MODE_OPEN_FILE) && dir_access->file_exists(f)) {
+		} else if (mode == FILE_MODE_OPEN_FILE || (mode == FILE_MODE_OPEN_ANY && FileAccess::exists(f))) {
 			emit_signal(SNAME("file_selected"), f);
 		} else if (mode == FILE_MODE_OPEN_ANY || mode == FILE_MODE_OPEN_DIR) {
 			emit_signal(SNAME("dir_selected"), f);
+		} else {
+			ERR_PRINT("The selected file is no longer accessible.");
+			emit_signal(SNAME("canceled"));
 		}
 	}
 }
@@ -252,6 +288,9 @@ void FileDialog::_validate_property(PropertyInfo &p_property) const {
 
 void FileDialog::_notification(int p_what) {
 	switch (p_what) {
+		case NOTIFICATION_EXIT_TREE: {
+			_cancel_native_dialog(false);
+		} break;
 		case NOTIFICATION_READY: {
 #ifdef TOOLS_ENABLED
 			if (is_part_of_edited_scene()) {
@@ -2689,6 +2728,7 @@ FileDialog::FileDialog() {
 }
 
 FileDialog::~FileDialog() {
+	_cancel_native_dialog(false);
 	if (unregister_func) {
 		unregister_func(this);
 	}

@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #import "display_server_apple_embedded.h"
+#include "native_file_dialog.h"
 
 #include "core/config/project_settings.h"
 #include "core/input/input.h"
@@ -370,6 +371,11 @@ bool DisplayServerAppleEmbedded::has_feature(DisplayServerEnums::Feature p_featu
 		// case DisplayServerEnums::FEATURE_MOUSE_WARP:
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG:
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_INPUT:
+#ifdef VISIONOS_ENABLED
+		case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE:
+		case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_MIME:
+			return true;
+#endif
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE:
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_EXTRA:
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_MIME:
@@ -933,4 +939,11 @@ void DisplayServerAppleEmbedded::set_native_icon(const String &p_filename) {
 
 void DisplayServerAppleEmbedded::set_icon(const Ref<Image> &p_icon) {
 	// Not supported on Apple embedded platforms.
+}
+
+Error DisplayServerAppleEmbedded::file_dialog_show(const String &p_title, const String &p_current_directory, const String &p_filename, bool p_show_hidden, DisplayServerEnums::FileDialogMode p_mode, const Vector<String> &p_filters, const Callable &p_callback, DisplayServerEnums::WindowID p_window_id) {
+	return AppleNativeFileDialog::show(p_title, p_current_directory, p_mode, p_filters, p_callback, p_window_id);
+}
+void DisplayServerAppleEmbedded::file_dialog_cancel(const Callable &p_callback) {
+	AppleNativeFileDialog::cancel(p_callback);
 }

@@ -949,6 +949,7 @@ Error DisplayServerMacOS::_file_dialog_with_options_show(const String &p_title, 
 	Callable callback = p_callback; // Make a copy for async completion handler.
 	if (p_mode == DisplayServerEnums::FILE_DIALOG_MODE_SAVE_FILE) {
 		NSSavePanel *panel = [NSSavePanel savePanel];
+		native_file_dialogs.push_back({ p_callback, panel });
 
 		[panel setDirectoryURL:[NSURL fileURLWithPath:url]];
 		[panel_delegate makeAccessoryView:panel filters:p_filters options:p_options];
@@ -963,6 +964,12 @@ Error DisplayServerMacOS::_file_dialog_with_options_show(const String &p_title, 
 		}
 
 		void (^completion_handler)(NSInteger ret) = ^(NSInteger ret) {
+			for (int i = 0; i < native_file_dialogs.size(); i++) {
+				if (native_file_dialogs[i].panel == panel) {
+					native_file_dialogs.remove_at(i);
+					break;
+				}
+			}
 			if (ret == NSModalResponseOK) {
 				// Save bookmark for folder.
 				if (OS::get_singleton()->is_sandboxed()) {
@@ -1060,6 +1067,7 @@ Error DisplayServerMacOS::_file_dialog_with_options_show(const String &p_title, 
 		}
 	} else {
 		NSOpenPanel *panel = [NSOpenPanel openPanel];
+		native_file_dialogs.push_back({ p_callback, panel });
 
 		[panel setDirectoryURL:[NSURL fileURLWithPath:url]];
 		[panel_delegate makeAccessoryView:panel filters:p_filters options:p_options];
@@ -1078,6 +1086,12 @@ Error DisplayServerMacOS::_file_dialog_with_options_show(const String &p_title, 
 		[panel setAllowsMultipleSelection:(p_mode == DisplayServerEnums::FILE_DIALOG_MODE_OPEN_FILES)];
 
 		void (^completion_handler)(NSInteger ret) = ^(NSInteger ret) {
+			for (int i = 0; i < native_file_dialogs.size(); i++) {
+				if (native_file_dialogs[i].panel == panel) {
+					native_file_dialogs.remove_at(i);
+					break;
+				}
+			}
 			if (ret == NSModalResponseOK) {
 				// Save bookmark for folder.
 				NSArray *urls = [(NSOpenPanel *)panel URLs];
@@ -3978,4 +3992,14 @@ DisplayServerMacOS::~DisplayServerMacOS() {
 	CGDisplayRemoveReconfigurationCallback(_displays_arrangement_changed, nullptr);
 
 	cursors_cache.clear();
+}
+
+void DisplayServerMacOS::file_dialog_cancel(const Callable &p_callback) {
+	_THREAD_SAFE_METHOD_
+	for (const NativeFileDialog &dialog : native_file_dialogs) {
+		if (dialog.callback == p_callback) {
+			[dialog.panel cancel:nil];
+			return;
+		}
+	}
 }
