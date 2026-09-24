@@ -46,6 +46,7 @@ class String;
 
 @interface GDTView : UIView
 
+@property(assign, nonatomic) NSInteger godotWindowID;
 @property(weak, nonatomic) GDTViewRenderer *renderer;
 @property(weak, nonatomic) id<GDTViewDelegate> delegate;
 

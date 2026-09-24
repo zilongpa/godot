@@ -34,6 +34,7 @@
 
 @interface GDTKeyboardInputView : UITextView
 
+@property(nonatomic, assign) NSInteger godotWindowID;
 - (BOOL)becomeFirstResponderWithString:(NSString *)existingString cursorStart:(NSInteger)start cursorEnd:(NSInteger)end;
 
 @end

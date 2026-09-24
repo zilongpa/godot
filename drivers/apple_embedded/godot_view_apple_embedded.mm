@@ -297,7 +297,7 @@ static const float earth_gravity = 9.80665;
 		[self.renderingLayer layoutDisplayLayer];
 
 		if (DisplayServerAppleEmbedded::get_singleton()) {
-			DisplayServerAppleEmbedded::get_singleton()->resize_window(self.bounds.size);
+			DisplayServerAppleEmbedded::get_singleton()->resize_window(self.bounds.size, self.godotWindowID);
 		}
 	}
 }
@@ -358,7 +358,7 @@ static const float earth_gravity = 9.80665;
 		int tid = [self getTouchIDForTouch:touch];
 		ERR_FAIL_COND(tid == -1);
 		CGPoint touchPoint = [touch locationInView:self];
-		DisplayServerAppleEmbedded::get_singleton()->touch_press(tid, touchPoint.x * self.contentScaleFactor, touchPoint.y * self.contentScaleFactor, true, touch.tapCount > 1);
+		DisplayServerAppleEmbedded::get_singleton()->touch_press(tid, touchPoint.x * self.contentScaleFactor, touchPoint.y * self.contentScaleFactor, true, touch.tapCount > 1, self.godotWindowID);
 	}
 }
 
@@ -370,7 +370,7 @@ static const float earth_gravity = 9.80665;
 		CGPoint prev_point = [touch previousLocationInView:self];
 		CGFloat alt = [touch altitudeAngle];
 		CGVector azim = [touch azimuthUnitVectorInView:self];
-		DisplayServerAppleEmbedded::get_singleton()->touch_drag(tid, prev_point.x * self.contentScaleFactor, prev_point.y * self.contentScaleFactor, touchPoint.x * self.contentScaleFactor, touchPoint.y * self.contentScaleFactor, [touch force] / [touch maximumPossibleForce], Vector2(azim.dx, azim.dy) * Math::cos(alt));
+		DisplayServerAppleEmbedded::get_singleton()->touch_drag(tid, prev_point.x * self.contentScaleFactor, prev_point.y * self.contentScaleFactor, touchPoint.x * self.contentScaleFactor, touchPoint.y * self.contentScaleFactor, [touch force] / [touch maximumPossibleForce], Vector2(azim.dx, azim.dy) * Math::cos(alt), self.godotWindowID);
 	}
 }
 
@@ -380,7 +380,7 @@ static const float earth_gravity = 9.80665;
 		ERR_FAIL_COND(tid == -1);
 		[self removeTouch:touch];
 		CGPoint touchPoint = [touch locationInView:self];
-		DisplayServerAppleEmbedded::get_singleton()->touch_press(tid, touchPoint.x * self.contentScaleFactor, touchPoint.y * self.contentScaleFactor, false, false);
+		DisplayServerAppleEmbedded::get_singleton()->touch_press(tid, touchPoint.x * self.contentScaleFactor, touchPoint.y * self.contentScaleFactor, false, false, self.godotWindowID);
 	}
 }
 
@@ -388,7 +388,7 @@ static const float earth_gravity = 9.80665;
 	for (UITouch *touch in touches) {
 		int tid = [self getTouchIDForTouch:touch];
 		ERR_FAIL_COND(tid == -1);
-		DisplayServerAppleEmbedded::get_singleton()->touches_canceled(tid);
+		DisplayServerAppleEmbedded::get_singleton()->touches_canceled(tid, self.godotWindowID);
 	}
 	[self clearTouches];
 }

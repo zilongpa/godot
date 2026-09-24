@@ -32,24 +32,150 @@ import SwiftUI
 import UIKit
 
 struct GodotSwiftUIViewController: UIViewControllerRepresentable {
+	var windowID: UInt64 = 0
 
 	func makeUIViewController(context: Context) -> GDTViewController {
 		let viewController = GDTViewController()
-		GDTAppDelegateService.viewController = viewController
+		viewController.godotWindowID = Int(windowID)
+		if windowID == 0 {
+			GDTAppDelegateService.viewController = viewController
+		} else {
+			#if os(visionOS)
+			GodotWindowControllers.register(windowID, controller: viewController)
+			#endif
+		}
 		return viewController
 	}
 
 	func updateUIViewController(_ uiViewController: GDTViewController, context: Context) {
-		// NOOP
+		#if os(visionOS)
+		if windowID != 0 {
+			uiViewController.godotAttachWindowIfReady()
+		}
+		#endif
+	}
+
+	static func dismantleUIViewController(_ uiViewController: GDTViewController, coordinator: ()) {
+		#if os(visionOS)
+		if uiViewController.godotWindowID != 0 {
+			GodotWindowControllers.unregister(UInt64(uiViewController.godotWindowID), controller: uiViewController)
+		}
+		#endif
 	}
 
 }
 
+#if os(visionOS)
+@MainActor private enum GodotWindowControllers {
+	private final class WeakController {
+		weak var value: GDTViewController?
+
+		init(_ controller: GDTViewController) {
+			value = controller
+		}
+	}
+
+	private static var controllers: [UInt64: WeakController] = [:]
+	private static var requestedWindows = Set<UInt64>()
+
+	static func request(_ id: UInt64) {
+		requestedWindows.insert(id)
+	}
+
+	static func dismiss(_ id: UInt64) {
+		requestedWindows.remove(id)
+	}
+
+	static func isRequested(_ id: UInt64) -> Bool {
+		requestedWindows.contains(id)
+	}
+
+	static func register(_ id: UInt64, controller: GDTViewController) {
+		controllers[id] = WeakController(controller)
+	}
+
+	static func attach(_ id: UInt64) {
+		controllers[id]?.value?.godotAttachWindowIfReady()
+	}
+
+	static func unregister(_ id: UInt64, controller: GDTViewController) {
+		if controllers[id]?.value === controller {
+			controllers.removeValue(forKey: id)
+		}
+	}
+}
+
+private extension Notification.Name {
+	static let godotOpenWindow = Notification.Name("org.godotengine.visionos.openWindow")
+	static let godotCloseWindow = Notification.Name("org.godotengine.visionos.closeWindow")
+}
+
+@_cdecl("godot_visionos_request_window")
+public func godotVisionOSRequestWindow(_ id: UInt64) {
+	DispatchQueue.main.async {
+		GodotWindowControllers.request(id)
+		GodotWindowControllers.attach(id)
+		NotificationCenter.default.post(name: .godotOpenWindow, object: id)
+	}
+}
+
+@_cdecl("godot_visionos_dismiss_window")
+public func godotVisionOSDismissWindow(_ id: UInt64) {
+	DispatchQueue.main.async {
+		GodotWindowControllers.dismiss(id)
+		NotificationCenter.default.post(name: .godotCloseWindow, object: id)
+	}
+}
+
+private struct GodotPrimaryWindow: View {
+	@Environment(\.openWindow) private var openWindow
+
+	var body: some View {
+		GodotSwiftUIViewController()
+			.ignoresSafeArea()
+			.onReceive(NotificationCenter.default.publisher(for: .godotOpenWindow)) { note in
+				guard let id = note.object as? UInt64 else { return }
+				guard GodotWindowControllers.isRequested(id) else { return }
+				openWindow(id: "godot-2d", value: id)
+			}
+	}
+}
+
+private struct GodotSecondaryWindow: View {
+	let id: UInt64
+	@Environment(\.dismiss) private var dismiss
+
+	var body: some View {
+		GodotSwiftUIViewController(windowID: id)
+			.ignoresSafeArea()
+			.onAppear {
+				if !GodotWindowControllers.isRequested(id) { dismiss() }
+			}
+			.onReceive(NotificationCenter.default.publisher(for: .godotCloseWindow)) { note in
+				if note.object as? UInt64 == id { dismiss() }
+			}
+	}
+}
+#endif
+
 struct GodotWindowScene: Scene {
 	var body: some Scene {
+		#if os(visionOS)
+		Window("Godot", id: "godot-main") {
+			GodotPrimaryWindow()
+		}
+		WindowGroup("Godot 2D", id: "godot-2d", for: UInt64.self) { id in
+			if let value = id.wrappedValue {
+				GodotSecondaryWindow(id: value)
+			}
+		}
+		.defaultSize(width: 960, height: 600)
+		.restorationBehavior(.disabled)
+		#else
 		WindowGroup {
 			GodotSwiftUIViewController()
 				.ignoresSafeArea()
 		}
+		#endif
 	}
 }

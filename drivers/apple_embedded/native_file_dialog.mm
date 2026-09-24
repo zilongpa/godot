@@ -33,6 +33,7 @@
 #import "document_access.h"
 #import "godot_app_delegate_service_apple_embedded.h"
 #import "godot_view_controller.h"
+#import "display_server_apple_embedded.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 namespace {
@@ -225,8 +226,11 @@ Error AppleNativeFileDialog::show(const String &p_title, const String &p_directo
 		if (provider.is_valid()) {
 			int64_t handle = provider.call(p_window);
 			host = (__bridge UIViewController *)(void *)handle;
-		} else if (p_window == DisplayServerEnums::MAIN_WINDOW_ID || p_window == DisplayServerEnums::INVALID_WINDOW_ID) {
-			host = GDTAppDelegateService.viewController;
+		} else {
+			DisplayServerAppleEmbedded *display = DisplayServerAppleEmbedded::get_singleton();
+			int64_t handle = display ? display->window_get_native_handle(DisplayServerEnums::WINDOW_HANDLE,
+					p_window == DisplayServerEnums::INVALID_WINDOW_ID ? DisplayServerEnums::MAIN_WINDOW_ID : p_window) : 0;
+			host = (__bridge UIViewController *)(void *)handle;
 		}
 		if (!host.viewIfLoaded.window || host.presentedViewController) {
 			[dialog finish:nil error:@"The requesting window is unavailable or already presenting a system dialog."];

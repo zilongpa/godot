@@ -105,6 +105,8 @@ String EditorExportPlatformVisionOS::_process_config_file_line(const Ref<EditorE
 		// Valid Archs
 	} else if (p_line.contains("$valid_archs")) {
 		strnew += p_line.replace("$valid_archs", "arm64") + "\n";
+	} else if (p_line.contains("<key>UIApplicationSupportsMultipleScenes</key>")) {
+		strnew += p_line.replace("<false/>", "<true/>") + "\n";
 
 		// Application Scene Manifest - Default Session Role
 	} else if (p_line.contains("$application_scene_manifest_default_session_role")) {

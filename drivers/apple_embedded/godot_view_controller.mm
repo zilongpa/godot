@@ -61,7 +61,7 @@
 - (void)pressesBegan:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
 	[super pressesBegan:presses withEvent:event];
 
-	if (!DisplayServerAppleEmbedded::get_singleton() || DisplayServerAppleEmbedded::get_singleton()->is_keyboard_active()) {
+	if (!DisplayServerAppleEmbedded::get_singleton() || DisplayServerAppleEmbedded::get_singleton()->is_keyboard_active(self.godotWindowID)) {
 		return;
 	}
 	if (@available(iOS 13.4, *)) {
@@ -84,10 +84,10 @@
 			if (!u32text.is_empty() && !u32text.begins_with("UIKey")) {
 				for (int i = 0; i < u32text.length(); i++) {
 					const char32_t c = u32text[i];
-					DisplayServerAppleEmbedded::get_singleton()->key(fix_keycode(us, key), c, fix_key_label(us, key), key, press.key.modifierFlags, true, location);
+					DisplayServerAppleEmbedded::get_singleton()->key(fix_keycode(us, key), c, fix_key_label(us, key), key, press.key.modifierFlags, true, location, self.godotWindowID);
 				}
 			} else {
-				DisplayServerAppleEmbedded::get_singleton()->key(fix_keycode(us, key), 0, fix_key_label(us, key), key, press.key.modifierFlags, true, location);
+				DisplayServerAppleEmbedded::get_singleton()->key(fix_keycode(us, key), 0, fix_key_label(us, key), key, press.key.modifierFlags, true, location, self.godotWindowID);
 			}
 		}
 	}
@@ -96,7 +96,7 @@
 - (void)pressesEnded:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
 	[super pressesEnded:presses withEvent:event];
 
-	if (!DisplayServerAppleEmbedded::get_singleton() || DisplayServerAppleEmbedded::get_singleton()->is_keyboard_active()) {
+	if (!DisplayServerAppleEmbedded::get_singleton() || DisplayServerAppleEmbedded::get_singleton()->is_keyboard_active(self.godotWindowID)) {
 		return;
 	}
 	if (@available(iOS 13.4, *)) {
@@ -115,7 +115,7 @@
 
 			KeyLocation location = KeyMappingAppleEmbedded::key_location(press.key.keyCode);
 
-			DisplayServerAppleEmbedded::get_singleton()->key(fix_keycode(us, key), 0, fix_key_label(us, key), key, press.key.modifierFlags, false, location);
+			DisplayServerAppleEmbedded::get_singleton()->key(fix_keycode(us, key), 0, fix_key_label(us, key), key, press.key.modifierFlags, false, location, self.godotWindowID);
 		}
 	}
 }
@@ -126,6 +126,7 @@
 
 	self.renderer = renderer;
 	self.view = view;
+	view.godotWindowID = self.godotWindowID;
 
 	view.renderer = self.renderer;
 	view.delegate = self;
@@ -171,20 +172,74 @@
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
+	#if defined(VISIONOS_ENABLED)
+	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(visionosWindowBecameKey:) name:UIWindowDidBecomeKeyNotification object:self.view.window];
+	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(visionosWindowResignedKey:) name:UIWindowDidResignKeyNotification object:self.view.window];
+	if (self.godotWindowID != DisplayServerEnums::MAIN_WINDOW_ID) {
+		[self godotAttachWindowIfReady];
+		return;
+	}
+	#endif
 	[self.godotView startRendering];
+	#if defined(VISIONOS_ENABLED)
+	if (DisplayServerAppleEmbedded::get_singleton()) {
+		DisplayServerAppleEmbedded::get_singleton()->focus_visionos_window(self.godotWindowID, self.view.window.isKeyWindow);
+	}
+	#endif
 #ifdef IOS_ENABLED
 	[self propagateUIPreferencesToRootViewController];
 #endif
 }
 
+- (void)godotAttachWindowIfReady {
+#if defined(VISIONOS_ENABLED)
+	if (self.godotWindowID == DisplayServerEnums::MAIN_WINDOW_ID || !self.viewIfLoaded.window) { return; }
+	if (DisplayServerAppleEmbedded *display = DisplayServerAppleEmbedded::get_singleton()) {
+		display->connect_visionos_window(self.godotWindowID, (__bridge void *)self);
+		display->focus_visionos_window(self.godotWindowID, self.view.window.isKeyWindow);
+	}
+#endif
+}
+
 - (void)viewDidDisappear:(BOOL)animated {
+	#if defined(VISIONOS_ENABLED)
+	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIWindowDidBecomeKeyNotification object:self.view.window];
+	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIWindowDidResignKeyNotification object:self.view.window];
+	if (DisplayServerAppleEmbedded::get_singleton()) {
+		DisplayServerAppleEmbedded::get_singleton()->focus_visionos_window(self.godotWindowID, false);
+	}
+	if (self.godotWindowID != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (DisplayServerAppleEmbedded::get_singleton()) {
+			DisplayServerAppleEmbedded::get_singleton()->disconnect_visionos_window(self.godotWindowID, (__bridge void *)self);
+		}
+		[super viewDidDisappear:animated];
+		return;
+	}
+	#endif
+	#if !defined(VISIONOS_ENABLED)
 	[self.godotView stopRendering];
+	#endif
 	[super viewDidDisappear:animated];
 }
+
+#if defined(VISIONOS_ENABLED)
+- (void)visionosWindowBecameKey:(NSNotification *)notification {
+	if (DisplayServerAppleEmbedded::get_singleton()) {
+		DisplayServerAppleEmbedded::get_singleton()->focus_visionos_window(self.godotWindowID, true);
+	}
+}
+
+- (void)visionosWindowResignedKey:(NSNotification *)notification {
+	if (DisplayServerAppleEmbedded::get_singleton()) {
+		DisplayServerAppleEmbedded::get_singleton()->focus_visionos_window(self.godotWindowID, false);
+	}
+}
+#endif
 
 - (void)observeKeyboard {
 	print_verbose("Setting up keyboard input view.");
 	self.keyboardView = [GDTKeyboardInputView new];
+	self.keyboardView.godotWindowID = self.godotWindowID;
 	[self.view addSubview:self.keyboardView];
 
 	print_verbose("Adding observer for keyboard show/hide.");

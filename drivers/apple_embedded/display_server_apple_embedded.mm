@@ -47,6 +47,11 @@
 
 #import <GameController/GameController.h>
 
+#ifdef VISIONOS_ENABLED
+extern "C" void godot_visionos_request_window(uint64_t p_window);
+extern "C" void godot_visionos_dismiss_window(uint64_t p_window);
+#endif
+
 static const float kDisplayServerIOSAcceleration = 1.f;
 
 DisplayServerAppleEmbedded *DisplayServerAppleEmbedded::get_singleton() {
@@ -57,6 +62,10 @@ DisplayServerAppleEmbedded::DisplayServerAppleEmbedded(const String &p_rendering
 	KeyMappingAppleEmbedded::initialize();
 
 	rendering_driver = p_rendering_driver;
+#ifdef VISIONOS_ENABLED
+	main_window_transparent = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_TRANSPARENT)) != 0;
+	GDTAppDelegateService.viewController.view.backgroundColor = main_window_transparent ? UIColor.clearColor : UIColor.blackColor;
+#endif
 
 	// Init TTS
 	bool tts_enabled = GLOBAL_GET("audio/general/text_to_speech");
@@ -222,17 +231,41 @@ Vector<String> DisplayServerAppleEmbedded::get_rendering_drivers_func() {
 // MARK: Events
 
 void DisplayServerAppleEmbedded::window_set_rect_changed_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window) {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->resize_callback = p_callable; }
+		return;
+	}
+#endif
 	window_resize_callback = p_callable;
 }
 
 void DisplayServerAppleEmbedded::window_set_window_event_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window) {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->event_callback = p_callable; }
+		return;
+	}
+#endif
 	window_event_callback = p_callable;
 }
 void DisplayServerAppleEmbedded::window_set_input_event_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window) {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->input_callback = p_callable; }
+		return;
+	}
+#endif
 	input_event_callback = p_callable;
 }
 
 void DisplayServerAppleEmbedded::window_set_input_text_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window) {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->text_callback = p_callable; }
+		return;
+	}
+#endif
 	input_text_callback = p_callable;
 }
 
@@ -249,14 +282,35 @@ void DisplayServerAppleEmbedded::_dispatch_input_events(const Ref<InputEvent> &p
 }
 
 void DisplayServerAppleEmbedded::send_input_event(const Ref<InputEvent> &p_event) const {
+#ifdef VISIONOS_ENABLED
+	const InputEventFromWindow *window_event = Object::cast_to<InputEventFromWindow>(p_event.ptr());
+	if (window_event && window_event->get_window_id() != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (const SubWindowData *data = sub_windows.getptr(window_event->get_window_id())) {
+			_window_callback(data->input_callback, p_event);
+		}
+		return;
+	}
+#endif
 	_window_callback(input_event_callback, p_event);
 }
 
-void DisplayServerAppleEmbedded::send_input_text(const String &p_text) const {
+void DisplayServerAppleEmbedded::send_input_text(const String &p_text, DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) { _window_callback(data->text_callback, p_text); }
+		return;
+	}
+#endif
 	_window_callback(input_text_callback, p_text);
 }
 
-void DisplayServerAppleEmbedded::send_window_event(DisplayServerEnums::WindowEvent p_event) const {
+void DisplayServerAppleEmbedded::send_window_event(DisplayServerEnums::WindowEvent p_event, DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) { _window_callback(data->event_callback, int(p_event)); }
+		return;
+	}
+#endif
 	_window_callback(window_event_callback, int(p_event));
 }
 
@@ -270,7 +324,7 @@ void DisplayServerAppleEmbedded::_window_callback(const Callable &p_callable, co
 
 // MARK: Touches
 
-void DisplayServerAppleEmbedded::touch_press(int p_idx, int p_x, int p_y, bool p_pressed, bool p_double_click) {
+void DisplayServerAppleEmbedded::touch_press(int p_idx, int p_x, int p_y, bool p_pressed, bool p_double_click, DisplayServerEnums::WindowID p_window) {
 	Ref<InputEventScreenTouch> ev;
 	ev.instantiate();
 
@@ -278,10 +332,11 @@ void DisplayServerAppleEmbedded::touch_press(int p_idx, int p_x, int p_y, bool p
 	ev->set_pressed(p_pressed);
 	ev->set_position(Vector2(p_x, p_y));
 	ev->set_double_tap(p_double_click);
+	ev->set_window_id(p_window);
 	perform_event(ev);
 }
 
-void DisplayServerAppleEmbedded::touch_drag(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_y, float p_pressure, Vector2 p_tilt) {
+void DisplayServerAppleEmbedded::touch_drag(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_y, float p_pressure, Vector2 p_tilt, DisplayServerEnums::WindowID p_window) {
 	Ref<InputEventScreenDrag> ev;
 	ev.instantiate();
 	ev->set_index(p_idx);
@@ -290,6 +345,7 @@ void DisplayServerAppleEmbedded::touch_drag(int p_idx, int p_prev_x, int p_prev_
 	ev->set_position(Vector2(p_x, p_y));
 	ev->set_relative(Vector2(p_x - p_prev_x, p_y - p_prev_y));
 	ev->set_relative_screen_position(ev->get_relative());
+	ev->set_window_id(p_window);
 	perform_event(ev);
 }
 
@@ -302,13 +358,13 @@ void DisplayServerAppleEmbedded::perform_event(const Ref<InputEvent> &p_event) {
 	input_singleton->parse_input_event(p_event);
 }
 
-void DisplayServerAppleEmbedded::touches_canceled(int p_idx) {
-	touch_press(p_idx, -1, -1, false, false);
+void DisplayServerAppleEmbedded::touches_canceled(int p_idx, DisplayServerEnums::WindowID p_window) {
+	touch_press(p_idx, -1, -1, false, false, p_window);
 }
 
 // MARK: Keyboard
 
-void DisplayServerAppleEmbedded::key(Key p_key, char32_t p_char, Key p_unshifted, Key p_physical, NSInteger p_modifier, bool p_pressed, KeyLocation p_location) {
+void DisplayServerAppleEmbedded::key(Key p_key, char32_t p_char, Key p_unshifted, Key p_physical, NSInteger p_modifier, bool p_pressed, KeyLocation p_location, DisplayServerEnums::WindowID p_window) {
 	Ref<InputEventKey> ev;
 	ev.instantiate();
 	ev->set_echo(false);
@@ -332,6 +388,7 @@ void DisplayServerAppleEmbedded::key(Key p_key, char32_t p_char, Key p_unshifted
 	ev->set_physical_keycode(p_physical);
 	ev->set_unicode(fix_unicode(p_char));
 	ev->set_location(p_location);
+	ev->set_window_id(p_window);
 	perform_event(ev);
 }
 
@@ -374,7 +431,10 @@ bool DisplayServerAppleEmbedded::has_feature(DisplayServerEnums::Feature p_featu
 #ifdef VISIONOS_ENABLED
 		case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE:
 		case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_MIME:
+		case DisplayServerEnums::FEATURE_WINDOW_TRANSPARENCY:
 			return true;
+		case DisplayServerEnums::FEATURE_SUBWINDOWS:
+			return rendering_driver == "metal";
 #endif
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE:
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_EXTRA:
@@ -538,14 +598,181 @@ Rect2i DisplayServerAppleEmbedded::screen_get_usable_rect(int p_screen) const {
 Vector<DisplayServerEnums::WindowID> DisplayServerAppleEmbedded::get_window_list() const {
 	Vector<DisplayServerEnums::WindowID> list;
 	list.push_back(DisplayServerEnums::MAIN_WINDOW_ID);
+#ifdef VISIONOS_ENABLED
+	for (const KeyValue<DisplayServerEnums::WindowID, SubWindowData> &entry : sub_windows) {
+		list.push_back(entry.key);
+	}
+#endif
 	return list;
+}
+
+DisplayServerEnums::WindowID DisplayServerAppleEmbedded::create_sub_window(DisplayServerEnums::WindowMode p_mode, DisplayServerEnums::VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect, bool p_exclusive, DisplayServerEnums::WindowID p_transient_parent) {
+#ifdef VISIONOS_ENABLED
+	if (rendering_driver != "metal") {
+		ERR_PRINT("Native visionOS windows require the Metal renderer.");
+		return DisplayServerEnums::INVALID_WINDOW_ID;
+	}
+	const DisplayServerEnums::WindowID id = next_sub_window_id++;
+	SubWindowData data;
+	data.requested_size = p_rect.size.maxi(1);
+	data.size = data.requested_size;
+	data.transparent = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_TRANSPARENT)) != 0;
+	sub_windows.insert(id, data);
+	return id;
+#else
+	return DisplayServerEnums::INVALID_WINDOW_ID;
+#endif
+}
+
+void DisplayServerAppleEmbedded::show_window(DisplayServerEnums::WindowID p_id) {
+#ifdef VISIONOS_ENABLED
+	if (SubWindowData *data = sub_windows.getptr(p_id)) {
+		if (!data->visible) {
+			data->visible = true;
+			godot_visionos_request_window(p_id);
+		}
+	}
+#endif
+}
+
+void DisplayServerAppleEmbedded::delete_sub_window(DisplayServerEnums::WindowID p_id) {
+#ifdef VISIONOS_ENABLED
+	SubWindowData *data = sub_windows.getptr(p_id);
+	if (!data) { return; }
+	focus_visionos_window(p_id, false);
+	data = sub_windows.getptr(p_id);
+	if (!data) { return; }
+#if defined(RD_ENABLED)
+	if (data->controller && rendering_device) {
+		rendering_device->screen_free(p_id);
+		rendering_context->window_destroy(p_id);
+	}
+#endif
+	const bool was_visible = data->visible;
+	sub_windows.erase(p_id);
+	if (focused_window_id == p_id) { focused_window_id = DisplayServerEnums::INVALID_WINDOW_ID; }
+	if (was_visible) { godot_visionos_dismiss_window(p_id); }
+#endif
+}
+
+DisplayServerEnums::WindowID DisplayServerAppleEmbedded::get_focused_window() const {
+#ifdef VISIONOS_ENABLED
+	return focused_window_id;
+#else
+	return DisplayServerEnums::MAIN_WINDOW_ID;
+#endif
+}
+
+void DisplayServerAppleEmbedded::focus_visionos_window(DisplayServerEnums::WindowID p_window, bool p_focused) {
+#ifdef VISIONOS_ENABLED
+	bool *focused = &main_window_focused;
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		SubWindowData *data = sub_windows.getptr(p_window);
+		if (!data || !data->controller) { return; }
+		focused = &data->focused;
+	}
+	if (*focused == p_focused) { return; }
+	if (p_focused && focused_window_id != p_window) {
+		const DisplayServerEnums::WindowID previous = focused_window_id;
+		if (previous == DisplayServerEnums::MAIN_WINDOW_ID) {
+			if (main_window_focused) {
+				main_window_focused = false;
+				send_window_event(DisplayServerEnums::WINDOW_EVENT_FOCUS_OUT, previous);
+			}
+		} else if (SubWindowData *old = sub_windows.getptr(previous)) {
+			if (old->focused) {
+				old->focused = false;
+				send_window_event(DisplayServerEnums::WINDOW_EVENT_FOCUS_OUT, previous);
+			}
+		}
+		if (p_window != DisplayServerEnums::MAIN_WINDOW_ID && !sub_windows.has(p_window)) { return; }
+	}
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		main_window_focused = p_focused;
+	} else {
+		sub_windows.getptr(p_window)->focused = p_focused;
+	}
+	if (p_focused) {
+		focused_window_id = p_window;
+	} else if (focused_window_id == p_window) {
+		focused_window_id = DisplayServerEnums::INVALID_WINDOW_ID;
+	}
+	send_window_event(p_focused ? DisplayServerEnums::WINDOW_EVENT_FOCUS_IN : DisplayServerEnums::WINDOW_EVENT_FOCUS_OUT, p_window);
+#endif
+}
+
+void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller) {
+#if defined(VISIONOS_ENABLED) && defined(METAL_ENABLED) && defined(RD_ENABLED)
+	SubWindowData *data = sub_windows.getptr(p_window);
+	if (!data || data->controller || !rendering_context || !rendering_device) { return; }
+	GDTViewController *controller = (__bridge GDTViewController *)p_controller;
+	CAMetalLayer *layer = (CAMetalLayer *)[controller.godotView initializeRenderingForDriver:@"metal"];
+	if (!layer) { return; }
+	RenderingContextDriverMetal::WindowPlatformData platform_data;
+	platform_data.layer = (__bridge CA::MetalLayer *)layer;
+	if (rendering_context->window_create(p_window, &platform_data) != OK) {
+		ERR_PRINT(vformat("Failed to create Metal surface for visionOS window %d.", p_window));
+		return;
+	}
+	data->controller = p_controller;
+	controller.view.backgroundColor = data->transparent ? UIColor.clearColor : UIColor.blackColor;
+	data->size = Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_scale();
+	rendering_context->window_set_size(p_window, data->size.x, data->size.y);
+	rendering_context->window_set_vsync_mode(p_window, DisplayServerEnums::VSYNC_ENABLED);
+	if (rendering_device->screen_create(p_window) != OK) {
+		ERR_PRINT(vformat("Failed to create rendering screen for visionOS window %d.", p_window));
+		rendering_context->window_destroy(p_window);
+		data->controller = nullptr;
+		return;
+	}
+	resize_window(controller.view.bounds.size, p_window);
+	window_set_size(data->requested_size, p_window);
+#endif
+}
+
+void DisplayServerAppleEmbedded::disconnect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller) {
+#ifdef VISIONOS_ENABLED
+	SubWindowData *data = sub_windows.getptr(p_window);
+	if (!data || data->controller != p_controller) { return; }
+	focus_visionos_window(p_window, false);
+	data = sub_windows.getptr(p_window);
+	if (!data || data->controller != p_controller) { return; }
+	const Callable callback = data->event_callback;
+#if defined(RD_ENABLED)
+	if (rendering_device) { rendering_device->screen_free(p_window); }
+	if (rendering_context) { rendering_context->window_destroy(p_window); }
+#endif
+	data->controller = nullptr;
+	if (sub_windows.has(p_window)) { _window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_CLOSE_REQUEST)); }
+	if (sub_windows.has(p_window)) { _window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_FORCE_CLOSE)); }
+#endif
 }
 
 DisplayServerEnums::WindowID DisplayServerAppleEmbedded::get_window_at_screen_position(const Point2i &p_position) const {
 	return DisplayServerEnums::MAIN_WINDOW_ID;
 }
 
+Point2i DisplayServerAppleEmbedded::mouse_get_position() const {
+	return Point2i();
+}
+
+void DisplayServerAppleEmbedded::window_set_mouse_passthrough(const Vector<Vector2> &p_region, DisplayServerEnums::WindowID p_window) {
+	if (!p_region.is_empty()) {
+		ERR_PRINT("Mouse passthrough regions are not supported on Apple Embedded windows.");
+	}
+}
+
 int64_t DisplayServerAppleEmbedded::window_get_native_handle(DisplayServerEnums::HandleType p_handle_type, DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		const SubWindowData *data = sub_windows.getptr(p_window);
+		if (!data || !data->controller) { return 0; }
+		GDTViewController *controller = (__bridge GDTViewController *)data->controller;
+		if (p_handle_type == DisplayServerEnums::WINDOW_HANDLE) { return (int64_t)controller; }
+		if (p_handle_type == DisplayServerEnums::WINDOW_VIEW) { return (int64_t)controller.godotView; }
+		return 0;
+	}
+#endif
 	ERR_FAIL_COND_V(p_window != DisplayServerEnums::MAIN_WINDOW_ID, 0);
 	switch (p_handle_type) {
 		case DisplayServerEnums::DISPLAY_HANDLE: {
@@ -564,10 +791,22 @@ int64_t DisplayServerAppleEmbedded::window_get_native_handle(DisplayServerEnums:
 }
 
 void DisplayServerAppleEmbedded::window_attach_instance_id(ObjectID p_instance, DisplayServerEnums::WindowID p_window) {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->attached_instance_id = p_instance; }
+		return;
+	}
+#endif
 	window_attached_instance_id = p_instance;
 }
 
 ObjectID DisplayServerAppleEmbedded::window_get_attached_instance_id(DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		const SubWindowData *data = sub_windows.getptr(p_window);
+		return data ? data->attached_instance_id : ObjectID();
+	}
+#endif
 	return window_attached_instance_id;
 }
 
@@ -601,26 +840,80 @@ void DisplayServerAppleEmbedded::window_set_transient(DisplayServerEnums::Window
 }
 
 void DisplayServerAppleEmbedded::window_set_max_size(const Size2i p_size, DisplayServerEnums::WindowID p_window) {
-	// Probably not supported for iOS
+#ifdef VISIONOS_ENABLED
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		main_window_max_size = p_size;
+	} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
+		data->max_size = p_size;
+	}
+	window_set_size(window_get_size(p_window), p_window);
+#endif
 }
 
 Size2i DisplayServerAppleEmbedded::window_get_max_size(DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_max_size; }
+	if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->max_size; }
+#endif
 	return Size2i();
 }
 
 void DisplayServerAppleEmbedded::window_set_min_size(const Size2i p_size, DisplayServerEnums::WindowID p_window) {
-	// Probably not supported for iOS
+#ifdef VISIONOS_ENABLED
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		main_window_min_size = p_size;
+	} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
+		data->min_size = p_size;
+	}
+	window_set_size(window_get_size(p_window), p_window);
+#endif
 }
 
 Size2i DisplayServerAppleEmbedded::window_get_min_size(DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_min_size; }
+	if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->min_size; }
+#endif
 	return Size2i();
 }
 
 void DisplayServerAppleEmbedded::window_set_size(const Size2i p_size, DisplayServerEnums::WindowID p_window) {
-	// Probably not supported for iOS
+#ifdef VISIONOS_ENABLED
+	if (p_size.x <= 0 || p_size.y <= 0) { return; }
+	UIViewController *controller = nil;
+	Size2i min_size;
+	Size2i max_size;
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		controller = GDTAppDelegateService.viewController;
+		min_size = main_window_min_size;
+		max_size = main_window_max_size;
+	} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
+		data->requested_size = p_size;
+		controller = (__bridge UIViewController *)data->controller;
+		min_size = data->min_size;
+		max_size = data->max_size;
+	}
+	UIWindowScene *scene = controller.viewIfLoaded.window.windowScene;
+	if (scene) {
+		CGSize points = CGSizeMake(p_size.x / screen_get_scale(), p_size.y / screen_get_scale());
+		UIWindowSceneGeometryPreferencesVision *preferences = [[UIWindowSceneGeometryPreferencesVision alloc] initWithSize:points];
+		const CGFloat unchanged = UIProposedSceneSizeNoPreference;
+		preferences.minimumSize = CGSizeMake(min_size.x > 0 ? min_size.x / screen_get_scale() : unchanged, min_size.y > 0 ? min_size.y / screen_get_scale() : unchanged);
+		preferences.maximumSize = CGSizeMake(max_size.x > 0 ? max_size.x / screen_get_scale() : unchanged, max_size.y > 0 ? max_size.y / screen_get_scale() : unchanged);
+		[scene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError *error) {
+			WARN_PRINT(vformat("visionOS did not apply requested window size: %s", String::utf8(error.localizedDescription.UTF8String)));
+		}];
+	}
+#endif
 }
 
 Size2i DisplayServerAppleEmbedded::window_get_size(DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		const SubWindowData *data = sub_windows.getptr(p_window);
+		return data ? data->size : Size2i();
+	}
+#endif
 	CGRect viewBounds = GDTAppDelegateService.viewController.view.bounds;
 	return Size2i(viewBounds.size.width, viewBounds.size.height) * screen_get_max_scale();
 }
@@ -634,6 +927,9 @@ void DisplayServerAppleEmbedded::window_set_mode(DisplayServerEnums::WindowMode 
 }
 
 DisplayServerEnums::WindowMode DisplayServerAppleEmbedded::window_get_mode(DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	return DisplayServerEnums::WINDOW_MODE_WINDOWED;
+#endif
 	return DisplayServerEnums::WindowMode::WINDOW_MODE_FULLSCREEN;
 }
 
@@ -642,10 +938,28 @@ bool DisplayServerAppleEmbedded::window_is_maximize_allowed(DisplayServerEnums::
 }
 
 void DisplayServerAppleEmbedded::window_set_flag(DisplayServerEnums::WindowFlags p_flag, bool p_enabled, DisplayServerEnums::WindowID p_window) {
-	// Probably not supported for iOS
+#ifdef VISIONOS_ENABLED
+	if (p_flag == DisplayServerEnums::WINDOW_FLAG_TRANSPARENT) {
+		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { main_window_transparent = p_enabled; }
+		UIViewController *controller = p_window == DisplayServerEnums::MAIN_WINDOW_ID ? GDTAppDelegateService.viewController : nil;
+		if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+			if (SubWindowData *data = sub_windows.getptr(p_window)) {
+				data->transparent = p_enabled;
+				controller = (__bridge UIViewController *)data->controller;
+			}
+		}
+		if (controller) { controller.view.backgroundColor = p_enabled ? UIColor.clearColor : UIColor.blackColor; }
+	}
+#endif
 }
 
 bool DisplayServerAppleEmbedded::window_get_flag(DisplayServerEnums::WindowFlags p_flag, DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_flag == DisplayServerEnums::WINDOW_FLAG_TRANSPARENT) {
+		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_transparent; }
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->transparent; }
+	}
+#endif
 	return false;
 }
 
@@ -658,6 +972,13 @@ void DisplayServerAppleEmbedded::window_move_to_foreground(DisplayServerEnums::W
 }
 
 bool DisplayServerAppleEmbedded::window_is_focused(DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		const SubWindowData *data = sub_windows.getptr(p_window);
+		return data && data->focused;
+	}
+	return main_window_focused;
+#endif
 	return true;
 }
 
@@ -690,6 +1011,12 @@ DisplayServerEnums::ScreenOrientation DisplayServerAppleEmbedded::screen_get_ori
 }
 
 bool DisplayServerAppleEmbedded::window_can_draw(DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		const SubWindowData *data = sub_windows.getptr(p_window);
+		return data && data->controller;
+	}
+#endif
 	return true;
 }
 
@@ -713,52 +1040,74 @@ _FORCE_INLINE_ int _convert_utf32_offset_to_utf16(const String &p_existing_text,
 
 void DisplayServerAppleEmbedded::virtual_keyboard_show(const String &p_existing_text, const Rect2 &p_screen_rect, DisplayServerEnums::VirtualKeyboardType p_type, int p_max_length, int p_cursor_start, int p_cursor_end) {
 	NSString *existingString = [[NSString alloc] initWithUTF8String:p_existing_text.utf8().get_data()];
+	GDTViewController *controller = GDTAppDelegateService.viewController;
+#ifdef VISIONOS_ENABLED
+	if (focused_window_id != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (SubWindowData *data = sub_windows.getptr(focused_window_id)) {
+			controller = (__bridge GDTViewController *)data->controller;
+		}
+	}
+#endif
+	GDTKeyboardInputView *keyboard = controller.keyboardView;
+	if (!keyboard) { return; }
 
-	GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
-	GDTAppDelegateService.viewController.keyboardView.textContentType = nil;
+	keyboard.keyboardType = UIKeyboardTypeDefault;
+	keyboard.textContentType = nil;
 	switch (p_type) {
 		case DisplayServerEnums::KEYBOARD_TYPE_DEFAULT: {
-			GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
+			keyboard.keyboardType = UIKeyboardTypeDefault;
 		} break;
 		case DisplayServerEnums::KEYBOARD_TYPE_MULTILINE: {
-			GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
+			keyboard.keyboardType = UIKeyboardTypeDefault;
 		} break;
 		case DisplayServerEnums::KEYBOARD_TYPE_NUMBER: {
-			GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypeNumberPad;
+			keyboard.keyboardType = UIKeyboardTypeNumberPad;
 		} break;
 		case DisplayServerEnums::KEYBOARD_TYPE_NUMBER_DECIMAL: {
-			GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypeDecimalPad;
+			keyboard.keyboardType = UIKeyboardTypeDecimalPad;
 		} break;
 		case DisplayServerEnums::KEYBOARD_TYPE_PHONE: {
-			GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypePhonePad;
-			GDTAppDelegateService.viewController.keyboardView.textContentType = UITextContentTypeTelephoneNumber;
+			keyboard.keyboardType = UIKeyboardTypePhonePad;
+			keyboard.textContentType = UITextContentTypeTelephoneNumber;
 		} break;
 		case DisplayServerEnums::KEYBOARD_TYPE_EMAIL_ADDRESS: {
-			GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypeEmailAddress;
-			GDTAppDelegateService.viewController.keyboardView.textContentType = UITextContentTypeEmailAddress;
+			keyboard.keyboardType = UIKeyboardTypeEmailAddress;
+			keyboard.textContentType = UITextContentTypeEmailAddress;
 		} break;
 		case DisplayServerEnums::KEYBOARD_TYPE_PASSWORD: {
-			GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypeDefault;
-			GDTAppDelegateService.viewController.keyboardView.textContentType = UITextContentTypePassword;
+			keyboard.keyboardType = UIKeyboardTypeDefault;
+			keyboard.textContentType = UITextContentTypePassword;
 		} break;
 		case DisplayServerEnums::KEYBOARD_TYPE_URL: {
-			GDTAppDelegateService.viewController.keyboardView.keyboardType = UIKeyboardTypeWebSearch;
-			GDTAppDelegateService.viewController.keyboardView.textContentType = UITextContentTypeURL;
+			keyboard.keyboardType = UIKeyboardTypeWebSearch;
+			keyboard.textContentType = UITextContentTypeURL;
 		} break;
 	}
 
-	[GDTAppDelegateService.viewController.keyboardView
+	[keyboard
 			becomeFirstResponderWithString:existingString
 							   cursorStart:_convert_utf32_offset_to_utf16(p_existing_text, p_cursor_start)
 								 cursorEnd:_convert_utf32_offset_to_utf16(p_existing_text, p_cursor_end)];
 }
 
-bool DisplayServerAppleEmbedded::is_keyboard_active() const {
-	return [GDTAppDelegateService.viewController.keyboardView isFirstResponder];
+bool DisplayServerAppleEmbedded::is_keyboard_active(DisplayServerEnums::WindowID p_window) const {
+	GDTViewController *controller = GDTAppDelegateService.viewController;
+#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) { controller = (__bridge GDTViewController *)data->controller; }
+	}
+#endif
+	return [controller.keyboardView isFirstResponder];
 }
 
 void DisplayServerAppleEmbedded::virtual_keyboard_hide() {
-	[GDTAppDelegateService.viewController.keyboardView resignFirstResponder];
+	GDTViewController *controller = GDTAppDelegateService.viewController;
+#ifdef VISIONOS_ENABLED
+	if (focused_window_id != DisplayServerEnums::MAIN_WINDOW_ID) {
+		if (SubWindowData *data = sub_windows.getptr(focused_window_id)) { controller = (__bridge GDTViewController *)data->controller; }
+	}
+#endif
+	[controller.keyboardView resignFirstResponder];
 }
 
 void DisplayServerAppleEmbedded::virtual_keyboard_set_height(int height) {
@@ -795,17 +1144,26 @@ bool DisplayServerAppleEmbedded::screen_is_kept_on() const {
 	return [UIApplication sharedApplication].idleTimerDisabled;
 }
 
-void DisplayServerAppleEmbedded::resize_window(CGSize viewSize) {
+void DisplayServerAppleEmbedded::resize_window(CGSize viewSize, DisplayServerEnums::WindowID p_window) {
 	Size2i size = Size2i(viewSize.width, viewSize.height) * screen_get_max_scale();
+	Callable callback = window_resize_callback;
+	#ifdef VISIONOS_ENABLED
+	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
+		SubWindowData *data = sub_windows.getptr(p_window);
+		if (!data || !data->controller) { return; }
+		data->size = size;
+		callback = data->resize_callback;
+	}
+	#endif
 
 #if defined(RD_ENABLED)
 	if (rendering_context) {
-		rendering_context->window_set_size(DisplayServerEnums::MAIN_WINDOW_ID, size.x, size.y);
+		rendering_context->window_set_size(p_window, size.x, size.y);
 	}
 #endif
 
 	Variant resize_rect = Rect2i(Point2i(), size);
-	_window_callback(window_resize_callback, resize_rect);
+	_window_callback(callback, resize_rect);
 }
 
 void DisplayServerAppleEmbedded::window_set_vsync_mode(DisplayServerEnums::VSyncMode p_vsync_mode, DisplayServerEnums::WindowID p_window) {

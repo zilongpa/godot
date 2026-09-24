@@ -5403,7 +5403,15 @@ Error RenderingDevice::screen_prepare_for_drawing(DisplayServerEnums::WindowID p
 
 	// After submitting work, acquire the swapchain image(s).
 	HashMap<DisplayServerEnums::WindowID, RDD::SwapChainID>::ConstIterator it = screen_swap_chains.find(p_screen);
+#ifdef VISIONOS_ENABLED
+	// SwiftUI attaches a newly requested window asynchronously. Its screen is created
+	// when the scene appears; until then the viewport can safely skip presentation.
+	if (it == screen_swap_chains.end()) {
+		return ERR_SKIP;
+	}
+#else
 	ERR_FAIL_COND_V_MSG(it == screen_swap_chains.end(), ERR_CANT_CREATE, "A swap chain was not created for the screen.");
+#endif
 
 	// Erase the framebuffer corresponding to this screen from the map in case any of the operations fail.
 	screen_framebuffers.erase(p_screen);

@@ -36,6 +36,10 @@
 
 @interface GDTAppDelegateService : NSObject <UIApplicationDelegate, UIWindowSceneDelegate>
 
+#if defined(VISIONOS_ENABLED)
+@property(strong, class, nonatomic, nullable) GDTViewController *viewController;
+#else
 @property(weak, class, nonatomic, nullable) GDTViewController *viewController;
+#endif
 
 @end

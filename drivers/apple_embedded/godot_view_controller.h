@@ -37,7 +37,10 @@
 
 @interface GDTViewController : UIViewController
 
+@property(nonatomic, assign) NSInteger godotWindowID;
 @property(nonatomic, readonly, strong) GDTView *godotView;
 @property(nonatomic, readonly, strong) GDTKeyboardInputView *keyboardView;
+
+- (void)godotAttachWindowIfReady;
 
 @end

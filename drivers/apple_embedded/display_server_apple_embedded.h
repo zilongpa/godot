@@ -31,6 +31,7 @@
 #pragma once
 
 #include "core/os/thread_safe.h"
+#include "core/templates/hash_map.h"
 #include "servers/display/display_server.h"
 
 #if defined(RD_ENABLED)
@@ -83,6 +84,31 @@ class DisplayServerAppleEmbedded : public DisplayServer {
 
 	Callable system_theme_changed;
 
+#ifdef VISIONOS_ENABLED
+	struct SubWindowData {
+		void *controller = nullptr; // Weak; owned by the SwiftUI scene.
+		Size2i size;
+		Size2i requested_size;
+		Size2i min_size;
+		Size2i max_size;
+		ObjectID attached_instance_id;
+		Callable resize_callback;
+		Callable event_callback;
+		Callable input_callback;
+		Callable text_callback;
+		bool visible = false;
+		bool focused = false;
+		bool transparent = false;
+	};
+	HashMap<DisplayServerEnums::WindowID, SubWindowData> sub_windows;
+	DisplayServerEnums::WindowID next_sub_window_id = 1;
+	DisplayServerEnums::WindowID focused_window_id = DisplayServerEnums::MAIN_WINDOW_ID;
+	bool main_window_focused = false;
+	bool main_window_transparent = false;
+	Size2i main_window_min_size;
+	Size2i main_window_max_size;
+#endif
+
 	int virtual_keyboard_height = 0;
 
 	void perform_event(const Ref<InputEvent> &p_event);
@@ -123,8 +149,8 @@ public:
 
 	static void _dispatch_input_events(const Ref<InputEvent> &p_event);
 	void send_input_event(const Ref<InputEvent> &p_event) const;
-	void send_input_text(const String &p_text) const;
-	void send_window_event(DisplayServerEnums::WindowEvent p_event) const;
+	void send_input_text(const String &p_text, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) const;
+	void send_window_event(DisplayServerEnums::WindowEvent p_event, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) const;
 	void _window_callback(const Callable &p_callable, const Variant &p_arg) const;
 
 	void emit_system_theme_changed();
@@ -133,14 +159,14 @@ public:
 
 	// MARK: Touches and Apple Pencil
 
-	void touch_press(int p_idx, int p_x, int p_y, bool p_pressed, bool p_double_click);
-	void touch_drag(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_y, float p_pressure, Vector2 p_tilt);
-	void touches_canceled(int p_idx);
+	void touch_press(int p_idx, int p_x, int p_y, bool p_pressed, bool p_double_click, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID);
+	void touch_drag(int p_idx, int p_prev_x, int p_prev_y, int p_x, int p_y, float p_pressure, Vector2 p_tilt, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID);
+	void touches_canceled(int p_idx, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID);
 
 	// MARK: Keyboard
 
-	void key(Key p_key, char32_t p_char, Key p_unshifted, Key p_physical, NSInteger p_modifier, bool p_pressed, KeyLocation p_location);
-	bool is_keyboard_active() const;
+	void key(Key p_key, char32_t p_char, Key p_unshifted, Key p_physical, NSInteger p_modifier, bool p_pressed, KeyLocation p_location, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID);
+	bool is_keyboard_active(DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) const;
 
 	// MARK: Motion
 
@@ -175,8 +201,15 @@ public:
 	virtual Rect2i screen_get_usable_rect(int p_screen = DisplayServerEnums::SCREEN_OF_MAIN_WINDOW) const override;
 
 	virtual Vector<DisplayServerEnums::WindowID> get_window_list() const override;
+	virtual DisplayServerEnums::WindowID create_sub_window(DisplayServerEnums::WindowMode p_mode, DisplayServerEnums::VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect = Rect2i(), bool p_exclusive = false, DisplayServerEnums::WindowID p_transient_parent = DisplayServerEnums::INVALID_WINDOW_ID) override;
+	virtual void show_window(DisplayServerEnums::WindowID p_id) override;
+	virtual void delete_sub_window(DisplayServerEnums::WindowID p_id) override;
+	virtual DisplayServerEnums::WindowID get_focused_window() const override;
+	void focus_visionos_window(DisplayServerEnums::WindowID p_window, bool p_focused);
 
 	virtual DisplayServerEnums::WindowID get_window_at_screen_position(const Point2i &p_position) const override;
+	virtual Point2i mouse_get_position() const override;
+	virtual void window_set_mouse_passthrough(const Vector<Vector2> &p_region, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) override;
 
 	virtual int64_t window_get_native_handle(DisplayServerEnums::HandleType p_handle_type, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) const override;
 
@@ -261,7 +294,9 @@ public:
 
 	virtual float window_get_output_max_linear_value(DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) const override;
 
-	void resize_window(CGSize size);
+	void resize_window(CGSize size, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID);
+	void connect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller);
+	void disconnect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller);
 	virtual void swap_buffers() override {}
 
 	virtual void set_native_icon(const String &p_filename) override;
