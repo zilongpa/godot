@@ -99,12 +99,16 @@ class DisplayServerAppleEmbedded : public DisplayServer {
 		bool visible = false;
 		bool focused = false;
 		bool transparent = false;
+		bool unresizable = false;
+		String title;
 	};
 	HashMap<DisplayServerEnums::WindowID, SubWindowData> sub_windows;
 	DisplayServerEnums::WindowID next_sub_window_id = 1;
 	DisplayServerEnums::WindowID focused_window_id = DisplayServerEnums::MAIN_WINDOW_ID;
 	bool main_window_focused = false;
 	bool main_window_transparent = false;
+	bool main_window_unresizable = false;
+	String main_window_title;
 	Size2i main_window_min_size;
 	Size2i main_window_max_size;
 #endif

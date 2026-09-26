@@ -183,6 +183,7 @@
 	[self.godotView startRendering];
 	#if defined(VISIONOS_ENABLED)
 	if (DisplayServerAppleEmbedded::get_singleton()) {
+		DisplayServerAppleEmbedded::get_singleton()->connect_visionos_window(self.godotWindowID, (__bridge void *)self);
 		DisplayServerAppleEmbedded::get_singleton()->focus_visionos_window(self.godotWindowID, self.view.window.isKeyWindow);
 	}
 	#endif

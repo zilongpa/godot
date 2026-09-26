@@ -64,6 +64,7 @@ DisplayServerAppleEmbedded::DisplayServerAppleEmbedded(const String &p_rendering
 	rendering_driver = p_rendering_driver;
 #ifdef VISIONOS_ENABLED
 	main_window_transparent = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_TRANSPARENT)) != 0;
+	main_window_unresizable = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED)) != 0;
 	GDTAppDelegateService.viewController.view.backgroundColor = main_window_transparent ? UIColor.clearColor : UIColor.blackColor;
 #endif
 
@@ -617,6 +618,7 @@ DisplayServerEnums::WindowID DisplayServerAppleEmbedded::create_sub_window(Displ
 	data.requested_size = p_rect.size.maxi(1);
 	data.size = data.requested_size;
 	data.transparent = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_TRANSPARENT)) != 0;
+	data.unresizable = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED)) != 0;
 	sub_windows.insert(id, data);
 	return id;
 #else
@@ -703,6 +705,11 @@ void DisplayServerAppleEmbedded::focus_visionos_window(DisplayServerEnums::Windo
 
 void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller) {
 #if defined(VISIONOS_ENABLED) && defined(METAL_ENABLED) && defined(RD_ENABLED)
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		window_set_title(main_window_title, p_window);
+		window_set_size(window_get_size(p_window), p_window);
+		return;
+	}
 	SubWindowData *data = sub_windows.getptr(p_window);
 	if (!data || data->controller || !rendering_context || !rendering_device) { return; }
 	GDTViewController *controller = (__bridge GDTViewController *)p_controller;
@@ -727,6 +734,7 @@ void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::Win
 	}
 	resize_window(controller.view.bounds.size, p_window);
 	window_set_size(data->requested_size, p_window);
+	window_set_title(data->title, p_window);
 #endif
 }
 
@@ -811,11 +819,25 @@ ObjectID DisplayServerAppleEmbedded::window_get_attached_instance_id(DisplayServ
 }
 
 void DisplayServerAppleEmbedded::window_set_title(const String &p_title, DisplayServerEnums::WindowID p_window) {
-	// Probably not supported for iOS
+#ifdef VISIONOS_ENABLED
+	UIViewController *controller = nil;
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		main_window_title = p_title;
+		controller = GDTAppDelegateService.viewController;
+	} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
+		data->title = p_title;
+		controller = (__bridge UIViewController *)data->controller;
+	}
+	controller.viewIfLoaded.window.windowScene.title = [NSString stringWithUTF8String:p_title.utf8().get_data()];
+#endif
 }
 
 int DisplayServerAppleEmbedded::window_get_current_screen(DisplayServerEnums::WindowID p_window) const {
+#ifdef VISIONOS_ENABLED
+	ERR_FAIL_COND_V(p_window != DisplayServerEnums::MAIN_WINDOW_ID && !sub_windows.has(p_window), DisplayServerEnums::INVALID_SCREEN);
+#else
 	ERR_FAIL_COND_V(p_window != DisplayServerEnums::MAIN_WINDOW_ID, DisplayServerEnums::INVALID_SCREEN);
+#endif
 	return 0;
 }
 
@@ -897,6 +919,7 @@ void DisplayServerAppleEmbedded::window_set_size(const Size2i p_size, DisplaySer
 	if (scene) {
 		CGSize points = CGSizeMake(p_size.x / screen_get_scale(), p_size.y / screen_get_scale());
 		UIWindowSceneGeometryPreferencesVision *preferences = [[UIWindowSceneGeometryPreferencesVision alloc] initWithSize:points];
+		preferences.resizingRestrictions = window_get_flag(DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED, p_window) ? UIWindowSceneResizingRestrictionsNone : UIWindowSceneResizingRestrictionsFreeform;
 		const CGFloat unchanged = UIProposedSceneSizeNoPreference;
 		preferences.minimumSize = CGSizeMake(min_size.x > 0 ? min_size.x / screen_get_scale() : unchanged, min_size.y > 0 ? min_size.y / screen_get_scale() : unchanged);
 		preferences.maximumSize = CGSizeMake(max_size.x > 0 ? max_size.x / screen_get_scale() : unchanged, max_size.y > 0 ? max_size.y / screen_get_scale() : unchanged);
@@ -939,6 +962,12 @@ bool DisplayServerAppleEmbedded::window_is_maximize_allowed(DisplayServerEnums::
 
 void DisplayServerAppleEmbedded::window_set_flag(DisplayServerEnums::WindowFlags p_flag, bool p_enabled, DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
+	if (p_flag == DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED) {
+		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { main_window_unresizable = p_enabled; }
+		else if (SubWindowData *data = sub_windows.getptr(p_window)) { data->unresizable = p_enabled; }
+		window_set_size(window_get_size(p_window), p_window);
+		return;
+	}
 	if (p_flag == DisplayServerEnums::WINDOW_FLAG_TRANSPARENT) {
 		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { main_window_transparent = p_enabled; }
 		UIViewController *controller = p_window == DisplayServerEnums::MAIN_WINDOW_ID ? GDTAppDelegateService.viewController : nil;
@@ -955,6 +984,10 @@ void DisplayServerAppleEmbedded::window_set_flag(DisplayServerEnums::WindowFlags
 
 bool DisplayServerAppleEmbedded::window_get_flag(DisplayServerEnums::WindowFlags p_flag, DisplayServerEnums::WindowID p_window) const {
 #ifdef VISIONOS_ENABLED
+	if (p_flag == DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED) {
+		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_unresizable; }
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->unresizable; }
+	}
 	if (p_flag == DisplayServerEnums::WINDOW_FLAG_TRANSPARENT) {
 		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_transparent; }
 		if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->transparent; }
@@ -968,7 +1001,18 @@ void DisplayServerAppleEmbedded::window_request_attention(DisplayServerEnums::Wi
 }
 
 void DisplayServerAppleEmbedded::window_move_to_foreground(DisplayServerEnums::WindowID p_window) {
-	// Probably not supported for iOS
+#ifdef VISIONOS_ENABLED
+	UIViewController *controller = nil;
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { controller = GDTAppDelegateService.viewController; }
+	else if (SubWindowData *data = sub_windows.getptr(p_window)) { controller = (__bridge UIViewController *)data->controller; }
+	UISceneSession *session = controller.viewIfLoaded.window.windowScene.session;
+	if (session) {
+		UISceneSessionActivationRequest *request = [UISceneSessionActivationRequest requestWithSession:session];
+		[UIApplication.sharedApplication activateSceneSessionForRequest:request errorHandler:^(NSError *error) {
+			WARN_PRINT(vformat("visionOS did not activate window: %s", String::utf8(error.localizedDescription.UTF8String)));
+		}];
+	}
+#endif
 }
 
 bool DisplayServerAppleEmbedded::window_is_focused(DisplayServerEnums::WindowID p_window) const {
