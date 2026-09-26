@@ -1671,6 +1671,10 @@ void MDCommandBuffer::_bind_uniforms_direct(MDUniformSet *p_set, MDShader *p_sha
 			frame_idx = 0;
 		}
 
+		if (indexes.buffer == UINT32_MAX && indexes.texture == UINT32_MAX && indexes.sampler == UINT32_MAX) {
+			continue;
+		}
+
 		switch (uniform.type) {
 			case RDD::UNIFORM_TYPE_SAMPLER: {
 				size_t count = uniform.ids.size();

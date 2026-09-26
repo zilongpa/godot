@@ -111,8 +111,9 @@ static_assert(ENUM_MEMBERS_EQUAL(RDD::COMPARE_OP_ALWAYS, MTL::CompareFunctionAlw
 
 RDD::BufferID RenderingDeviceDriverMetal::buffer_create(uint64_t p_size, BitField<BufferUsageBits> p_usage, MemoryAllocationType p_allocation_type, uint64_t p_frames_drawn) {
 	const uint64_t original_size = p_size;
+	const uint64_t dynamic_alignment = p_usage.has_flag(BUFFER_USAGE_UNIFORM_BIT) ? MAX(uint64_t(16), device_properties->limits.minUniformBufferOffsetAlignment) : 16;
 	if (p_usage.has_flag(BUFFER_USAGE_DYNAMIC_PERSISTENT_BIT)) {
-		p_size = round_up_to_alignment(p_size, 16u) * _frame_count;
+		p_size = round_up_to_alignment(p_size, dynamic_alignment) * _frame_count;
 	}
 
 	MTL::ResourceOptions options = 0;
@@ -140,7 +141,7 @@ RDD::BufferID RenderingDeviceDriverMetal::buffer_create(uint64_t p_size, BitFiel
 		dyn_buffer->last_frame_mapped = p_frames_drawn - 1ul;
 #endif
 		dyn_buffer->set_frame_index(0u);
-		dyn_buffer->size_bytes = round_up_to_alignment(original_size, 16u);
+		dyn_buffer->size_bytes = round_up_to_alignment(original_size, dynamic_alignment);
 	} else {
 		buf_info = memnew(BufferInfo);
 	}

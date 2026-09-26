@@ -335,9 +335,14 @@ void MetalDeviceProperties::init_limits(MTL::Device *p_device) {
 	limits.minUniformBufferOffsetAlignment = 64;
 #endif
 
-#if TARGET_OS_OSX
+#if TARGET_OS_OSX || TARGET_OS_VISION
 	// This is Apple Silicon specific.
 	limits.minUniformBufferOffsetAlignment = 16;
+#endif
+
+#ifdef VISIONOS_SIMULATOR
+	// Simulator constant-buffer bindings require 256-byte offsets.
+	limits.minUniformBufferOffsetAlignment = 256;
 #endif
 
 	limits.maxDrawIndexedIndexValue = std::numeric_limits<uint32_t>::max() - 1;

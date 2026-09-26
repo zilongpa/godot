@@ -115,7 +115,9 @@ public func godotVisionOSRequestWindow(_ id: UInt64) {
 	DispatchQueue.main.async {
 		GodotWindowControllers.request(id)
 		GodotWindowControllers.attach(id)
-		NotificationCenter.default.post(name: .godotOpenWindow, object: id)
+		// Renderer integrations may claim the request before the default host opens it.
+		let routing = NSMutableDictionary()
+		NotificationCenter.default.post(name: .godotOpenWindow, object: id, userInfo: ["routing": routing])
 	}
 }
 
@@ -135,8 +137,12 @@ private struct GodotPrimaryWindow: View {
 			.ignoresSafeArea()
 			.onReceive(NotificationCenter.default.publisher(for: .godotOpenWindow)) { note in
 				guard let id = note.object as? UInt64 else { return }
-				guard GodotWindowControllers.isRequested(id) else { return }
-				openWindow(id: "godot-2d", value: id)
+				let routing = note.userInfo?["routing"] as? NSMutableDictionary
+				DispatchQueue.main.async {
+					guard routing?["claimed"] as? Bool != true else { return }
+					guard GodotWindowControllers.isRequested(id) else { return }
+					openWindow(id: "godot-2d", value: id)
+				}
 			}
 	}
 }

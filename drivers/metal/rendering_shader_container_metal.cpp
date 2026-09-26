@@ -382,6 +382,26 @@ bool RenderingShaderContainerMetal::_set_code_from_spirv(const ReflectShader &p_
 	options.emit_line_directives = true;
 #endif
 
+	// Direct binding has a small fixed slot table. Declared but unused resources
+	// must not consume slots (the mobile renderer declares more than 16 samplers).
+	HashSet<uint64_t> active_bindings;
+	if (!msl_options.argument_buffers) {
+		for (const ReflectShaderStage &shader_stage : p_spirv) {
+			Span<uint32_t> spirv = shader_stage.spirv();
+			try {
+				CompilerMSL compiler(spirv.ptr(), spirv.size());
+				for (VariableID id : compiler.get_active_interface_variables()) {
+					if (compiler.has_decoration(id, spv::DecorationDescriptorSet) && compiler.has_decoration(id, spv::DecorationBinding)) {
+						uint64_t set = compiler.get_decoration(id, spv::DecorationDescriptorSet);
+						active_bindings.insert((set << 32) | compiler.get_decoration(id, spv::DecorationBinding));
+					}
+				}
+			} catch (CompilerError &e) {
+				ERR_FAIL_V_MSG(false, "Failed to inspect active Metal resources: " + String(e.what()));
+			}
+		}
+	}
+
 	// Assign MSL bindings for all the descriptor sets.
 	typedef std::pair<MSLResourceBinding, uint32_t> MSLBindingInfo;
 	LocalVector<MSLBindingInfo> spirv_bindings;
@@ -421,6 +441,12 @@ bool RenderingShaderContainerMetal::_set_code_from_spirv(const ReflectShader &p_
 
 			for (const ReflectUniform &uniform : dset) {
 				const SpvReflectDescriptorBinding &binding = uniform.get_spv_reflect();
+
+				if (!msl_options.argument_buffers && !active_bindings.has((uint64_t(idx_dset) << 32) | uniform.binding)) {
+					iter++;
+					found++;
+					continue;
+				}
 
 				found->active_stages = uniform.stages;
 
@@ -633,6 +659,9 @@ bool RenderingShaderContainerMetal::_set_code_from_spirv(const ReflectShader &p_
 
 		spv::ExecutionModel execution_model = map_stage(stage);
 		for (uint32_t jj = 0; jj < spirv_bindings.size(); jj++) {
+			if (spirv_bindings[jj].second == 0) {
+				continue;
+			}
 			MSLResourceBinding &rb = spirv_bindings.ptr()[jj].first;
 			rb.stage = execution_model;
 			compiler.add_msl_resource_binding(rb);
