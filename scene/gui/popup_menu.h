@@ -383,6 +383,7 @@ public:
 
 	void set_item_count(int p_count);
 	int get_item_count() const;
+	Rect2 get_item_rect(int p_idx, bool p_clipped = true) const;
 
 	void set_prefer_native_menu(bool p_enabled);
 	bool is_prefer_native_menu() const;

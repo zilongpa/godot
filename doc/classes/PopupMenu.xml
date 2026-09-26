@@ -315,6 +315,15 @@
 				Returns the max states of the item at the given [param index].
 			</description>
 		</method>
+		<method name="get_item_rect" qualifiers="const">
+			<return type="Rect2" />
+			<param index="0" name="index" type="int" />
+			<param index="1" name="clipped" type="bool" default="true" />
+			<description>
+				Returns the item's last drawn hover rectangle in menu-local coordinates, before the window content scale is applied. When [param clipped] is [code]true[/code], the rectangle is clipped to the scroll area. Scrolling, search-bar layout, and themed item sizes are included.
+				Returns an empty rectangle when the menu or item is hidden, when the item has not been drawn yet, or when using a native system menu. Wait for layout and drawing before using the result.
+			</description>
+		</method>
 		<method name="get_item_shortcut" qualifiers="const">
 			<return type="Shortcut" />
 			<param index="0" name="index" type="int" />
