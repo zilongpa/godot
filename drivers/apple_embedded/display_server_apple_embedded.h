@@ -87,6 +87,7 @@ class DisplayServerAppleEmbedded : public DisplayServer {
 #ifdef VISIONOS_ENABLED
 	struct SubWindowData {
 		void *controller = nullptr; // Weak; owned by the SwiftUI scene.
+		void *scene = nullptr; // Weak scene identity; used only until its disconnect notification.
 		Size2i size;
 		Size2i requested_size;
 		Size2i min_size;
@@ -103,6 +104,7 @@ class DisplayServerAppleEmbedded : public DisplayServer {
 		String title;
 	};
 	HashMap<DisplayServerEnums::WindowID, SubWindowData> sub_windows;
+	id visionos_scene_disconnect_observer = nil;
 	DisplayServerEnums::WindowID next_sub_window_id = 1;
 	DisplayServerEnums::WindowID focused_window_id = DisplayServerEnums::MAIN_WINDOW_ID;
 	bool main_window_focused = false;
@@ -301,6 +303,7 @@ public:
 	void resize_window(CGSize size, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID);
 	void connect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller);
 	void disconnect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller);
+	void disconnect_visionos_scene(void *p_scene);
 	virtual void swap_buffers() override {}
 
 	virtual void set_native_icon(const String &p_filename) override;

@@ -66,6 +66,11 @@ DisplayServerAppleEmbedded::DisplayServerAppleEmbedded(const String &p_rendering
 	main_window_transparent = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_TRANSPARENT)) != 0;
 	main_window_unresizable = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED)) != 0;
 	GDTAppDelegateService.viewController.view.backgroundColor = main_window_transparent ? UIColor.clearColor : UIColor.blackColor;
+	visionos_scene_disconnect_observer = [[NSNotificationCenter defaultCenter] addObserverForName:UISceneDidDisconnectNotification object:nil queue:nil usingBlock:^(NSNotification *notification) {
+		if (DisplayServerAppleEmbedded *display = DisplayServerAppleEmbedded::get_singleton()) {
+			display->disconnect_visionos_scene((__bridge void *)notification.object);
+		}
+	}];
 #endif
 
 	// Init TTS
@@ -191,6 +196,12 @@ DisplayServerAppleEmbedded::DisplayServerAppleEmbedded(const String &p_rendering
 }
 
 DisplayServerAppleEmbedded::~DisplayServerAppleEmbedded() {
+#ifdef VISIONOS_ENABLED
+	if (visionos_scene_disconnect_observer) {
+		[[NSNotificationCenter defaultCenter] removeObserver:visionos_scene_disconnect_observer];
+		visionos_scene_disconnect_observer = nil;
+	}
+#endif
 	if (native_menu) {
 		memdelete(native_menu);
 		native_menu = nullptr;
@@ -711,8 +722,22 @@ void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::Win
 		return;
 	}
 	SubWindowData *data = sub_windows.getptr(p_window);
-	if (!data || data->controller || !rendering_context || !rendering_device) { return; }
+	if (!data || !rendering_context || !rendering_device) { return; }
+	if (data->controller == p_controller) { return; }
 	GDTViewController *controller = (__bridge GDTViewController *)p_controller;
+	UIWindowScene *scene = controller.view.window.windowScene;
+	if (!scene) { return; }
+	// SwiftUI may replace a controller without closing its scene. Rebind the
+	// existing Godot window ID without sending a close request to the game.
+	if (data->controller) {
+		focus_visionos_window(p_window, false);
+		data = sub_windows.getptr(p_window);
+		if (!data) { return; }
+		rendering_device->screen_free(p_window);
+		rendering_context->window_destroy(p_window);
+		data->controller = nullptr;
+		data->scene = nullptr;
+	}
 	CAMetalLayer *layer = (CAMetalLayer *)[controller.godotView initializeRenderingForDriver:@"metal"];
 	if (!layer) { return; }
 	RenderingContextDriverMetal::WindowPlatformData platform_data;
@@ -722,6 +747,7 @@ void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::Win
 		return;
 	}
 	data->controller = p_controller;
+	data->scene = (__bridge void *)scene;
 	controller.view.backgroundColor = data->transparent ? UIColor.clearColor : UIColor.blackColor;
 	data->size = Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_scale();
 	rendering_context->window_set_size(p_window, data->size.x, data->size.y);
@@ -730,6 +756,7 @@ void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::Win
 		ERR_PRINT(vformat("Failed to create rendering screen for visionOS window %d.", p_window));
 		rendering_context->window_destroy(p_window);
 		data->controller = nullptr;
+		data->scene = nullptr;
 		return;
 	}
 	resize_window(controller.view.bounds.size, p_window);
@@ -751,8 +778,24 @@ void DisplayServerAppleEmbedded::disconnect_visionos_window(DisplayServerEnums::
 	if (rendering_context) { rendering_context->window_destroy(p_window); }
 #endif
 	data->controller = nullptr;
+	data->scene = nullptr;
 	if (sub_windows.has(p_window)) { _window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_CLOSE_REQUEST)); }
 	if (sub_windows.has(p_window)) { _window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_FORCE_CLOSE)); }
+#endif
+}
+
+void DisplayServerAppleEmbedded::disconnect_visionos_scene(void *p_scene) {
+#ifdef VISIONOS_ENABLED
+	if (!p_scene) { return; }
+	Vector<DisplayServerEnums::WindowID> closing;
+	for (const KeyValue<DisplayServerEnums::WindowID, SubWindowData> &entry : sub_windows) {
+		if (entry.value.scene == p_scene && entry.value.controller) { closing.push_back(entry.key); }
+	}
+	for (DisplayServerEnums::WindowID id : closing) {
+		if (SubWindowData *data = sub_windows.getptr(id)) {
+			if (data->scene == p_scene && data->controller) { disconnect_visionos_window(id, data->controller); }
+		}
+	}
 #endif
 }
 

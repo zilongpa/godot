@@ -210,9 +210,9 @@
 		DisplayServerAppleEmbedded::get_singleton()->focus_visionos_window(self.godotWindowID, false);
 	}
 	if (self.godotWindowID != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (DisplayServerAppleEmbedded::get_singleton()) {
-			DisplayServerAppleEmbedded::get_singleton()->disconnect_visionos_window(self.godotWindowID, (__bridge void *)self);
-		}
+		// A view can disappear while its visionOS scene remains open, for example
+		// during system UI presentation or SwiftUI controller replacement. The
+		// DisplayServer disconnects this window on UISceneDidDisconnect instead.
 		[super viewDidDisappear:animated];
 		return;
 	}
