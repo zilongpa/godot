@@ -130,10 +130,11 @@ struct SwiftUIApp: App {
 	init() {
 		print("visionOS app init (useCompositorServices: \(useCompositorServices))")
 		GDTAppDelegateServiceVisionOS.renderMode = useCompositorServices ? .compositorServices : .windowed
+		GDTVisionOSWindows.host = GodotWindowHost.shared
 	}
 
 	var body: some Scene {
-		GodotWindowScene()
+		GodotWindowScenes()
 		CompositorServicesImmersiveSpace()
 	}
 }

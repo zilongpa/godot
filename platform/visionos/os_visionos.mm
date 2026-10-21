@@ -30,6 +30,7 @@
 
 #import "os_visionos.h"
 
+#import "accessibility_server_visionos.h"
 #import "display_server_visionos.h"
 
 #ifdef VISIONOS_ENABLED
@@ -41,6 +42,7 @@ OS_VisionOS *OS_VisionOS::get_singleton() {
 OS_VisionOS::OS_VisionOS() :
 		OS_AppleEmbedded() {
 	DisplayServerVisionOS::register_visionos_driver();
+	AccessibilityServerVisionOS::register_create_func();
 }
 
 OS_VisionOS::~OS_VisionOS() {}

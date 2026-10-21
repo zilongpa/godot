@@ -29,7 +29,12 @@
 /**************************************************************************/
 
 #import "display_server_apple_embedded.h"
+
 #include "native_file_dialog.h"
+
+#ifdef VISIONOS_ENABLED
+#import "godot_visionos_windows.h"
+#endif
 
 #include "core/config/project_settings.h"
 #include "core/input/input.h"
@@ -43,14 +48,10 @@
 #import "drivers/apple_embedded/key_mapping_apple_embedded.h"
 #import "drivers/apple_embedded/os_apple_embedded.h"
 #import "drivers/apple_embedded/tts_apple_embedded.h"
+#include "servers/display/accessibility_server.h"
 #include "servers/display/native_menu.h"
 
 #import <GameController/GameController.h>
-
-#ifdef VISIONOS_ENABLED
-extern "C" void godot_visionos_request_window(uint64_t p_window);
-extern "C" void godot_visionos_dismiss_window(uint64_t p_window);
-#endif
 
 static const float kDisplayServerIOSAcceleration = 1.f;
 
@@ -65,12 +66,21 @@ DisplayServerAppleEmbedded::DisplayServerAppleEmbedded(const String &p_rendering
 #ifdef VISIONOS_ENABLED
 	main_window_transparent = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_TRANSPARENT)) != 0;
 	main_window_unresizable = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED)) != 0;
-	GDTAppDelegateService.viewController.view.backgroundColor = main_window_transparent ? UIColor.clearColor : UIColor.blackColor;
-	visionos_scene_disconnect_observer = [[NSNotificationCenter defaultCenter] addObserverForName:UISceneDidDisconnectNotification object:nil queue:nil usingBlock:^(NSNotification *notification) {
-		if (DisplayServerAppleEmbedded *display = DisplayServerAppleEmbedded::get_singleton()) {
-			display->disconnect_visionos_scene((__bridge void *)notification.object);
-		}
-	}];
+	main_window_requested_size = p_resolution;
+	// Keep the system glass behind Godot's layer: while a window is resized,
+	// the layer catches up a frame late, and an opaque view shows a black edge.
+	GDTAppDelegateService.viewController.view.backgroundColor = UIColor.clearColor;
+	if (AccessibilityServer *accessibility = AccessibilityServer::get_singleton()) {
+		accessibility->window_create(DisplayServerEnums::MAIN_WINDOW_ID, nullptr);
+	}
+	visionos_scene_disconnect_observer = [[NSNotificationCenter defaultCenter] addObserverForName:UISceneDidDisconnectNotification
+																						   object:nil
+																							queue:nil
+																					   usingBlock:^(NSNotification *notification) {
+																						   if (DisplayServerAppleEmbedded *display = DisplayServerAppleEmbedded::get_singleton()) {
+																							   display->disconnect_visionos_scene((__bridge void *)notification.object);
+																						   }
+																					   }];
 #endif
 
 	// Init TTS
@@ -245,7 +255,9 @@ Vector<String> DisplayServerAppleEmbedded::get_rendering_drivers_func() {
 void DisplayServerAppleEmbedded::window_set_rect_changed_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->resize_callback = p_callable; }
+		if (SubWindowData *data = sub_windows.getptr(p_window)) {
+			data->resize_callback = p_callable;
+		}
 		return;
 	}
 #endif
@@ -255,7 +267,9 @@ void DisplayServerAppleEmbedded::window_set_rect_changed_callback(const Callable
 void DisplayServerAppleEmbedded::window_set_window_event_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->event_callback = p_callable; }
+		if (SubWindowData *data = sub_windows.getptr(p_window)) {
+			data->event_callback = p_callable;
+		}
 		return;
 	}
 #endif
@@ -264,7 +278,9 @@ void DisplayServerAppleEmbedded::window_set_window_event_callback(const Callable
 void DisplayServerAppleEmbedded::window_set_input_event_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->input_callback = p_callable; }
+		if (SubWindowData *data = sub_windows.getptr(p_window)) {
+			data->input_callback = p_callable;
+		}
 		return;
 	}
 #endif
@@ -274,7 +290,9 @@ void DisplayServerAppleEmbedded::window_set_input_event_callback(const Callable 
 void DisplayServerAppleEmbedded::window_set_input_text_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->text_callback = p_callable; }
+		if (SubWindowData *data = sub_windows.getptr(p_window)) {
+			data->text_callback = p_callable;
+		}
 		return;
 	}
 #endif
@@ -309,7 +327,9 @@ void DisplayServerAppleEmbedded::send_input_event(const Ref<InputEvent> &p_event
 void DisplayServerAppleEmbedded::send_input_text(const String &p_text, DisplayServerEnums::WindowID p_window) const {
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (const SubWindowData *data = sub_windows.getptr(p_window)) { _window_callback(data->text_callback, p_text); }
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) {
+			_window_callback(data->text_callback, p_text);
+		}
 		return;
 	}
 #endif
@@ -319,7 +339,9 @@ void DisplayServerAppleEmbedded::send_input_text(const String &p_text, DisplaySe
 void DisplayServerAppleEmbedded::send_window_event(DisplayServerEnums::WindowEvent p_event, DisplayServerEnums::WindowID p_window) const {
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (const SubWindowData *data = sub_windows.getptr(p_window)) { _window_callback(data->event_callback, int(p_event)); }
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) {
+			_window_callback(data->event_callback, int(p_event));
+		}
 		return;
 	}
 #endif
@@ -441,12 +463,16 @@ bool DisplayServerAppleEmbedded::has_feature(DisplayServerEnums::Feature p_featu
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG:
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_INPUT:
 #ifdef VISIONOS_ENABLED
+		case DisplayServerEnums::FEATURE_NATIVE_DIALOG:
+		case DisplayServerEnums::FEATURE_NATIVE_DIALOG_INPUT:
 		case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE:
 		case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_MIME:
 		case DisplayServerEnums::FEATURE_WINDOW_TRANSPARENCY:
 			return true;
 		case DisplayServerEnums::FEATURE_SUBWINDOWS:
 			return rendering_driver == "metal";
+		case DisplayServerEnums::FEATURE_ACCESSIBILITY_SCREEN_READER:
+			return true;
 #endif
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE:
 		// case DisplayServerEnums::FEATURE_NATIVE_DIALOG_FILE_EXTRA:
@@ -631,6 +657,9 @@ DisplayServerEnums::WindowID DisplayServerAppleEmbedded::create_sub_window(Displ
 	data.transparent = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_TRANSPARENT)) != 0;
 	data.unresizable = (p_flags & (1 << DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED)) != 0;
 	sub_windows.insert(id, data);
+	if (AccessibilityServer *accessibility = AccessibilityServer::get_singleton()) {
+		accessibility->window_create(id, nullptr);
+	}
 	return id;
 #else
 	return DisplayServerEnums::INVALID_WINDOW_ID;
@@ -642,7 +671,21 @@ void DisplayServerAppleEmbedded::show_window(DisplayServerEnums::WindowID p_id) 
 	if (SubWindowData *data = sub_windows.getptr(p_id)) {
 		if (!data->visible) {
 			data->visible = true;
-			godot_visionos_request_window(p_id);
+			const float scale = screen_get_scale();
+			const auto points = [scale](const Size2i &p_size) {
+				return CGSizeMake(MAX(p_size.x, 0) / scale, MAX(p_size.y, 0) / scale);
+			};
+			GDTWindowRequest *request = [[GDTWindowRequest alloc] initWithWindowID:p_id
+																			 title:[NSString stringWithUTF8String:data->title.utf8().get_data()]
+																			  size:points(data->requested_size)
+																	   minimumSize:points(data->min_size)
+																	   maximumSize:points(data->max_size)
+																		 resizable:!data->unresizable
+																		 placement:(GDTWindowPlacement)data->placement
+																 placementTargetID:@(data->placement_target)
+																	ornamentAnchor:GDTUnitPoint3D{ data->ornament_anchor.x, data->ornament_anchor.y, data->ornament_anchor.z }
+																 ornamentAlignment:(GDTOrnamentAlignment)data->ornament_alignment];
+			[GDTVisionOSWindows openWindow:request];
 		}
 	}
 #endif
@@ -651,10 +694,14 @@ void DisplayServerAppleEmbedded::show_window(DisplayServerEnums::WindowID p_id) 
 void DisplayServerAppleEmbedded::delete_sub_window(DisplayServerEnums::WindowID p_id) {
 #ifdef VISIONOS_ENABLED
 	SubWindowData *data = sub_windows.getptr(p_id);
-	if (!data) { return; }
+	if (!data) {
+		return;
+	}
 	focus_visionos_window(p_id, false);
 	data = sub_windows.getptr(p_id);
-	if (!data) { return; }
+	if (!data) {
+		return;
+	}
 #if defined(RD_ENABLED)
 	if (data->controller && rendering_device) {
 		rendering_device->screen_free(p_id);
@@ -663,8 +710,34 @@ void DisplayServerAppleEmbedded::delete_sub_window(DisplayServerEnums::WindowID 
 #endif
 	const bool was_visible = data->visible;
 	sub_windows.erase(p_id);
-	if (focused_window_id == p_id) { focused_window_id = DisplayServerEnums::INVALID_WINDOW_ID; }
-	if (was_visible) { godot_visionos_dismiss_window(p_id); }
+	if (AccessibilityServer *accessibility = AccessibilityServer::get_singleton()) {
+		accessibility->window_destroy(p_id);
+	}
+	if (focused_window_id == p_id) {
+		focused_window_id = DisplayServerEnums::INVALID_WINDOW_ID;
+	}
+	if (was_visible) {
+		[GDTVisionOSWindows closeWindow:p_id];
+	}
+#endif
+}
+
+void DisplayServerAppleEmbedded::window_set_placement(int p_placement, DisplayServerEnums::WindowID p_target, const Vector3 &p_ornament_anchor, int p_ornament_alignment, DisplayServerEnums::WindowID p_window) {
+#ifdef VISIONOS_ENABLED
+	if (SubWindowData *data = sub_windows.getptr(p_window)) {
+		data->placement = p_placement;
+		data->placement_target = p_target;
+		data->ornament_anchor = p_ornament_anchor;
+		data->ornament_alignment = p_ornament_alignment;
+	}
+#endif
+}
+
+int DisplayServerAppleEmbedded::accessibility_screen_reader_active() const {
+#ifdef VISIONOS_ENABLED
+	return UIAccessibilityIsVoiceOverRunning() ? 1 : 0;
+#else
+	return -1;
 #endif
 }
 
@@ -681,10 +754,14 @@ void DisplayServerAppleEmbedded::focus_visionos_window(DisplayServerEnums::Windo
 	bool *focused = &main_window_focused;
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
 		SubWindowData *data = sub_windows.getptr(p_window);
-		if (!data || !data->controller) { return; }
+		if (!data || !data->controller) {
+			return;
+		}
 		focused = &data->focused;
 	}
-	if (*focused == p_focused) { return; }
+	if (*focused == p_focused) {
+		return;
+	}
 	if (p_focused && focused_window_id != p_window) {
 		const DisplayServerEnums::WindowID previous = focused_window_id;
 		if (previous == DisplayServerEnums::MAIN_WINDOW_ID) {
@@ -698,7 +775,9 @@ void DisplayServerAppleEmbedded::focus_visionos_window(DisplayServerEnums::Windo
 				send_window_event(DisplayServerEnums::WINDOW_EVENT_FOCUS_OUT, previous);
 			}
 		}
-		if (p_window != DisplayServerEnums::MAIN_WINDOW_ID && !sub_windows.has(p_window)) { return; }
+		if (p_window != DisplayServerEnums::MAIN_WINDOW_ID && !sub_windows.has(p_window)) {
+			return;
+		}
 	}
 	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
 		main_window_focused = p_focused;
@@ -718,28 +797,38 @@ void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::Win
 #if defined(VISIONOS_ENABLED) && defined(METAL_ENABLED) && defined(RD_ENABLED)
 	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
 		window_set_title(main_window_title, p_window);
-		window_set_size(window_get_size(p_window), p_window);
+		window_set_size(_window_requested_size(p_window), p_window);
 		return;
 	}
 	SubWindowData *data = sub_windows.getptr(p_window);
-	if (!data || !rendering_context || !rendering_device) { return; }
-	if (data->controller == p_controller) { return; }
+	if (!data || !rendering_context || !rendering_device) {
+		return;
+	}
+	if (data->controller == p_controller) {
+		return;
+	}
 	GDTViewController *controller = (__bridge GDTViewController *)p_controller;
 	UIWindowScene *scene = controller.view.window.windowScene;
-	if (!scene) { return; }
+	if (!scene) {
+		return;
+	}
 	// SwiftUI may replace a controller without closing its scene. Rebind the
 	// existing Godot window ID without sending a close request to the game.
 	if (data->controller) {
 		focus_visionos_window(p_window, false);
 		data = sub_windows.getptr(p_window);
-		if (!data) { return; }
+		if (!data) {
+			return;
+		}
 		rendering_device->screen_free(p_window);
 		rendering_context->window_destroy(p_window);
 		data->controller = nullptr;
 		data->scene = nullptr;
 	}
 	CAMetalLayer *layer = (CAMetalLayer *)[controller.godotView initializeRenderingForDriver:@"metal"];
-	if (!layer) { return; }
+	if (!layer) {
+		return;
+	}
 	RenderingContextDriverMetal::WindowPlatformData platform_data;
 	platform_data.layer = (__bridge CA::MetalLayer *)layer;
 	if (rendering_context->window_create(p_window, &platform_data) != OK) {
@@ -748,7 +837,7 @@ void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::Win
 	}
 	data->controller = p_controller;
 	data->scene = (__bridge void *)scene;
-	controller.view.backgroundColor = data->transparent ? UIColor.clearColor : UIColor.blackColor;
+	controller.view.backgroundColor = UIColor.clearColor;
 	data->size = Size2i(layer.bounds.size.width, layer.bounds.size.height) * screen_get_scale();
 	rendering_context->window_set_size(p_window, data->size.x, data->size.y);
 	rendering_context->window_set_vsync_mode(p_window, DisplayServerEnums::VSYNC_ENABLED);
@@ -768,32 +857,77 @@ void DisplayServerAppleEmbedded::connect_visionos_window(DisplayServerEnums::Win
 void DisplayServerAppleEmbedded::disconnect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller) {
 #ifdef VISIONOS_ENABLED
 	SubWindowData *data = sub_windows.getptr(p_window);
-	if (!data || data->controller != p_controller) { return; }
+	if (!data || data->controller != p_controller) {
+		return;
+	}
 	focus_visionos_window(p_window, false);
 	data = sub_windows.getptr(p_window);
-	if (!data || data->controller != p_controller) { return; }
+	if (!data || data->controller != p_controller) {
+		return;
+	}
 	const Callable callback = data->event_callback;
+	release_visionos_window(p_window, p_controller);
+	if (sub_windows.has(p_window)) {
+		_window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_CLOSE_REQUEST));
+	}
+	if (sub_windows.has(p_window)) {
+		_window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_FORCE_CLOSE));
+	}
+#endif
+}
+
+void DisplayServerAppleEmbedded::release_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller) {
+#ifdef VISIONOS_ENABLED
+	SubWindowData *data = sub_windows.getptr(p_window);
+	if (!data || data->controller != p_controller) {
+		return;
+	}
 #if defined(RD_ENABLED)
-	if (rendering_device) { rendering_device->screen_free(p_window); }
-	if (rendering_context) { rendering_context->window_destroy(p_window); }
+	if (rendering_device) {
+		rendering_device->screen_free(p_window);
+	}
+	if (rendering_context) {
+		rendering_context->window_destroy(p_window);
+	}
 #endif
 	data->controller = nullptr;
 	data->scene = nullptr;
-	if (sub_windows.has(p_window)) { _window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_CLOSE_REQUEST)); }
-	if (sub_windows.has(p_window)) { _window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_FORCE_CLOSE)); }
+#endif
+}
+
+void DisplayServerAppleEmbedded::visionos_window_closed_by_person(DisplayServerEnums::WindowID p_window) {
+#ifdef VISIONOS_ENABLED
+	SubWindowData *data = sub_windows.getptr(p_window);
+	if (!data) {
+		return;
+	}
+	data->visible = false;
+	const Callable callback = data->event_callback;
+	_window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_CLOSE_REQUEST));
+	if (sub_windows.has(p_window)) {
+		_window_callback(callback, int(DisplayServerEnums::WINDOW_EVENT_FORCE_CLOSE));
+	}
 #endif
 }
 
 void DisplayServerAppleEmbedded::disconnect_visionos_scene(void *p_scene) {
 #ifdef VISIONOS_ENABLED
-	if (!p_scene) { return; }
+	if (!p_scene) {
+		return;
+	}
 	Vector<DisplayServerEnums::WindowID> closing;
 	for (const KeyValue<DisplayServerEnums::WindowID, SubWindowData> &entry : sub_windows) {
-		if (entry.value.scene == p_scene && entry.value.controller) { closing.push_back(entry.key); }
+		// Ornaments share their window's scene and close with it, through Window.
+		const bool ornament = entry.value.placement == (int)GDTWindowPlacementOrnament;
+		if (entry.value.scene == p_scene && entry.value.controller && !ornament) {
+			closing.push_back(entry.key);
+		}
 	}
 	for (DisplayServerEnums::WindowID id : closing) {
 		if (SubWindowData *data = sub_windows.getptr(id)) {
-			if (data->scene == p_scene && data->controller) { disconnect_visionos_window(id, data->controller); }
+			if (data->scene == p_scene && data->controller) {
+				disconnect_visionos_window(id, data->controller);
+			}
 		}
 	}
 #endif
@@ -817,10 +951,16 @@ int64_t DisplayServerAppleEmbedded::window_get_native_handle(DisplayServerEnums:
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
 		const SubWindowData *data = sub_windows.getptr(p_window);
-		if (!data || !data->controller) { return 0; }
+		if (!data || !data->controller) {
+			return 0;
+		}
 		GDTViewController *controller = (__bridge GDTViewController *)data->controller;
-		if (p_handle_type == DisplayServerEnums::WINDOW_HANDLE) { return (int64_t)controller; }
-		if (p_handle_type == DisplayServerEnums::WINDOW_VIEW) { return (int64_t)controller.godotView; }
+		if (p_handle_type == DisplayServerEnums::WINDOW_HANDLE) {
+			return (int64_t)controller;
+		}
+		if (p_handle_type == DisplayServerEnums::WINDOW_VIEW) {
+			return (int64_t)controller.godotView;
+		}
 		return 0;
 	}
 #endif
@@ -844,7 +984,9 @@ int64_t DisplayServerAppleEmbedded::window_get_native_handle(DisplayServerEnums:
 void DisplayServerAppleEmbedded::window_attach_instance_id(ObjectID p_instance, DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (SubWindowData *data = sub_windows.getptr(p_window)) { data->attached_instance_id = p_instance; }
+		if (SubWindowData *data = sub_windows.getptr(p_window)) {
+			data->attached_instance_id = p_instance;
+		}
 		return;
 	}
 #endif
@@ -911,14 +1053,18 @@ void DisplayServerAppleEmbedded::window_set_max_size(const Size2i p_size, Displa
 	} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
 		data->max_size = p_size;
 	}
-	window_set_size(window_get_size(p_window), p_window);
+	window_set_size(_window_requested_size(p_window), p_window);
 #endif
 }
 
 Size2i DisplayServerAppleEmbedded::window_get_max_size(DisplayServerEnums::WindowID p_window) const {
 #ifdef VISIONOS_ENABLED
-	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_max_size; }
-	if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->max_size; }
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		return main_window_max_size;
+	}
+	if (const SubWindowData *data = sub_windows.getptr(p_window)) {
+		return data->max_size;
+	}
 #endif
 	return Size2i();
 }
@@ -930,25 +1076,52 @@ void DisplayServerAppleEmbedded::window_set_min_size(const Size2i p_size, Displa
 	} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
 		data->min_size = p_size;
 	}
-	window_set_size(window_get_size(p_window), p_window);
+	window_set_size(_window_requested_size(p_window), p_window);
 #endif
 }
 
 Size2i DisplayServerAppleEmbedded::window_get_min_size(DisplayServerEnums::WindowID p_window) const {
 #ifdef VISIONOS_ENABLED
-	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_min_size; }
-	if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->min_size; }
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		return main_window_min_size;
+	}
+	if (const SubWindowData *data = sub_windows.getptr(p_window)) {
+		return data->min_size;
+	}
 #endif
 	return Size2i();
 }
 
+Size2i DisplayServerAppleEmbedded::_window_requested_size(DisplayServerEnums::WindowID p_window) const {
+	Size2i size;
+#ifdef VISIONOS_ENABLED
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		size = main_window_requested_size;
+	} else if (const SubWindowData *data = sub_windows.getptr(p_window)) {
+		size = data->requested_size;
+	}
+#endif
+	return size.x > 0 && size.y > 0 ? size : window_get_size(p_window);
+}
+
 void DisplayServerAppleEmbedded::window_set_size(const Size2i p_size, DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
-	if (p_size.x <= 0 || p_size.y <= 0) { return; }
+	if (p_size.x <= 0 || p_size.y <= 0) {
+		return;
+	}
 	UIViewController *controller = nil;
 	Size2i min_size;
 	Size2i max_size;
 	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		// visionOS applies a size asynchronously. Until then the window reports
+		// its old size, and Godot asks to keep it; don't let that cancel the request.
+		const Size2i current = window_get_size(p_window);
+		const auto same = [](const Size2i &p_a, const Size2i &p_b) { return Math::abs(p_a.x - p_b.x) <= 2 && Math::abs(p_a.y - p_b.y) <= 2; };
+		if (main_window_resize_pending && same(p_size, current) && !same(p_size, main_window_requested_size)) {
+			return;
+		}
+		main_window_requested_size = p_size;
+		main_window_resize_pending = !same(p_size, current);
 		controller = GDTAppDelegateService.viewController;
 		min_size = main_window_min_size;
 		max_size = main_window_max_size;
@@ -966,9 +1139,13 @@ void DisplayServerAppleEmbedded::window_set_size(const Size2i p_size, DisplaySer
 		const CGFloat unchanged = UIProposedSceneSizeNoPreference;
 		preferences.minimumSize = CGSizeMake(min_size.x > 0 ? min_size.x / screen_get_scale() : unchanged, min_size.y > 0 ? min_size.y / screen_get_scale() : unchanged);
 		preferences.maximumSize = CGSizeMake(max_size.x > 0 ? max_size.x / screen_get_scale() : unchanged, max_size.y > 0 ? max_size.y / screen_get_scale() : unchanged);
-		[scene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError *error) {
-			WARN_PRINT(vformat("visionOS did not apply requested window size: %s", String::utf8(error.localizedDescription.UTF8String)));
-		}];
+		[scene requestGeometryUpdateWithPreferences:preferences
+									   errorHandler:^(NSError *error) {
+										   if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+											   main_window_resize_pending = false;
+										   }
+										   WARN_PRINT(vformat("visionOS did not apply requested window size: %s", String::utf8(error.localizedDescription.UTF8String)));
+									   }];
 	}
 #endif
 }
@@ -1006,21 +1183,20 @@ bool DisplayServerAppleEmbedded::window_is_maximize_allowed(DisplayServerEnums::
 void DisplayServerAppleEmbedded::window_set_flag(DisplayServerEnums::WindowFlags p_flag, bool p_enabled, DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
 	if (p_flag == DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED) {
-		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { main_window_unresizable = p_enabled; }
-		else if (SubWindowData *data = sub_windows.getptr(p_window)) { data->unresizable = p_enabled; }
-		window_set_size(window_get_size(p_window), p_window);
+		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+			main_window_unresizable = p_enabled;
+		} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
+			data->unresizable = p_enabled;
+		}
+		window_set_size(_window_requested_size(p_window), p_window);
 		return;
 	}
 	if (p_flag == DisplayServerEnums::WINDOW_FLAG_TRANSPARENT) {
-		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { main_window_transparent = p_enabled; }
-		UIViewController *controller = p_window == DisplayServerEnums::MAIN_WINDOW_ID ? GDTAppDelegateService.viewController : nil;
-		if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-			if (SubWindowData *data = sub_windows.getptr(p_window)) {
-				data->transparent = p_enabled;
-				controller = (__bridge UIViewController *)data->controller;
-			}
+		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+			main_window_transparent = p_enabled;
+		} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
+			data->transparent = p_enabled;
 		}
-		if (controller) { controller.view.backgroundColor = p_enabled ? UIColor.clearColor : UIColor.blackColor; }
 	}
 #endif
 }
@@ -1028,12 +1204,20 @@ void DisplayServerAppleEmbedded::window_set_flag(DisplayServerEnums::WindowFlags
 bool DisplayServerAppleEmbedded::window_get_flag(DisplayServerEnums::WindowFlags p_flag, DisplayServerEnums::WindowID p_window) const {
 #ifdef VISIONOS_ENABLED
 	if (p_flag == DisplayServerEnums::WINDOW_FLAG_RESIZE_DISABLED) {
-		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_unresizable; }
-		if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->unresizable; }
+		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+			return main_window_unresizable;
+		}
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) {
+			return data->unresizable;
+		}
 	}
 	if (p_flag == DisplayServerEnums::WINDOW_FLAG_TRANSPARENT) {
-		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { return main_window_transparent; }
-		if (const SubWindowData *data = sub_windows.getptr(p_window)) { return data->transparent; }
+		if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+			return main_window_transparent;
+		}
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) {
+			return data->transparent;
+		}
 	}
 #endif
 	return false;
@@ -1046,14 +1230,18 @@ void DisplayServerAppleEmbedded::window_request_attention(DisplayServerEnums::Wi
 void DisplayServerAppleEmbedded::window_move_to_foreground(DisplayServerEnums::WindowID p_window) {
 #ifdef VISIONOS_ENABLED
 	UIViewController *controller = nil;
-	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) { controller = GDTAppDelegateService.viewController; }
-	else if (SubWindowData *data = sub_windows.getptr(p_window)) { controller = (__bridge UIViewController *)data->controller; }
+	if (p_window == DisplayServerEnums::MAIN_WINDOW_ID) {
+		controller = GDTAppDelegateService.viewController;
+	} else if (SubWindowData *data = sub_windows.getptr(p_window)) {
+		controller = (__bridge UIViewController *)data->controller;
+	}
 	UISceneSession *session = controller.viewIfLoaded.window.windowScene.session;
 	if (session) {
 		UISceneSessionActivationRequest *request = [UISceneSessionActivationRequest requestWithSession:session];
-		[UIApplication.sharedApplication activateSceneSessionForRequest:request errorHandler:^(NSError *error) {
-			WARN_PRINT(vformat("visionOS did not activate window: %s", String::utf8(error.localizedDescription.UTF8String)));
-		}];
+		[UIApplication.sharedApplication activateSceneSessionForRequest:request
+														   errorHandler:^(NSError *error) {
+															   WARN_PRINT(vformat("visionOS did not activate window: %s", String::utf8(error.localizedDescription.UTF8String)));
+														   }];
 	}
 #endif
 }
@@ -1136,7 +1324,9 @@ void DisplayServerAppleEmbedded::virtual_keyboard_show(const String &p_existing_
 	}
 #endif
 	GDTKeyboardInputView *keyboard = controller.keyboardView;
-	if (!keyboard) { return; }
+	if (!keyboard) {
+		return;
+	}
 
 	keyboard.keyboardType = UIKeyboardTypeDefault;
 	keyboard.textContentType = nil;
@@ -1181,7 +1371,9 @@ bool DisplayServerAppleEmbedded::is_keyboard_active(DisplayServerEnums::WindowID
 	GDTViewController *controller = GDTAppDelegateService.viewController;
 #ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (const SubWindowData *data = sub_windows.getptr(p_window)) { controller = (__bridge GDTViewController *)data->controller; }
+		if (const SubWindowData *data = sub_windows.getptr(p_window)) {
+			controller = (__bridge GDTViewController *)data->controller;
+		}
 	}
 #endif
 	return [controller.keyboardView isFirstResponder];
@@ -1191,7 +1383,9 @@ void DisplayServerAppleEmbedded::virtual_keyboard_hide() {
 	GDTViewController *controller = GDTAppDelegateService.viewController;
 #ifdef VISIONOS_ENABLED
 	if (focused_window_id != DisplayServerEnums::MAIN_WINDOW_ID) {
-		if (SubWindowData *data = sub_windows.getptr(focused_window_id)) { controller = (__bridge GDTViewController *)data->controller; }
+		if (SubWindowData *data = sub_windows.getptr(focused_window_id)) {
+			controller = (__bridge GDTViewController *)data->controller;
+		}
 	}
 #endif
 	[controller.keyboardView resignFirstResponder];
@@ -1234,14 +1428,23 @@ bool DisplayServerAppleEmbedded::screen_is_kept_on() const {
 void DisplayServerAppleEmbedded::resize_window(CGSize viewSize, DisplayServerEnums::WindowID p_window) {
 	Size2i size = Size2i(viewSize.width, viewSize.height) * screen_get_max_scale();
 	Callable callback = window_resize_callback;
-	#ifdef VISIONOS_ENABLED
+#ifdef VISIONOS_ENABLED
 	if (p_window != DisplayServerEnums::MAIN_WINDOW_ID) {
 		SubWindowData *data = sub_windows.getptr(p_window);
-		if (!data || !data->controller) { return; }
+		if (!data || !data->controller) {
+			return;
+		}
 		data->size = size;
 		callback = data->resize_callback;
+	} else if (main_window_resize_pending) {
+		if (Math::abs(size.x - main_window_requested_size.x) <= 2 && Math::abs(size.y - main_window_requested_size.y) <= 2) {
+			main_window_resize_pending = false;
+		}
+	} else {
+		// The person resized the window.
+		main_window_requested_size = size;
 	}
-	#endif
+#endif
 
 #if defined(RD_ENABLED)
 	if (rendering_context) {
@@ -1385,6 +1588,64 @@ void DisplayServerAppleEmbedded::set_native_icon(const String &p_filename) {
 void DisplayServerAppleEmbedded::set_icon(const Ref<Image> &p_icon) {
 	// Not supported on Apple embedded platforms.
 }
+
+#ifdef VISIONOS_ENABLED
+Error DisplayServerAppleEmbedded::_present_alert(id p_alert) {
+	// Present from the app's main window, or the focused window while the main one isn't shown.
+	UIViewController *host = GDTAppDelegateService.viewController;
+	if (!host.viewIfLoaded.window) {
+		if (SubWindowData *data = sub_windows.getptr(focused_window_id)) {
+			host = (__bridge UIViewController *)data->controller;
+		}
+	}
+	ERR_FAIL_COND_V_MSG(!host.viewIfLoaded.window, ERR_UNAVAILABLE, "No window can show the dialog.");
+	ERR_FAIL_COND_V_MSG(host.presentedViewController, ERR_BUSY, "The window is already showing a dialog.");
+	[host presentViewController:p_alert animated:YES completion:nil];
+	return OK;
+}
+
+Error DisplayServerAppleEmbedded::dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback, int p_destructive_button, int p_cancel_button) {
+	UIAlertController *alert = [UIAlertController alertControllerWithTitle:[NSString stringWithUTF8String:p_title.utf8().get_data()]
+																   message:[NSString stringWithUTF8String:p_description.utf8().get_data()]
+															preferredStyle:UIAlertControllerStyleAlert];
+	const Callable callback = p_callback;
+	for (int i = 0; i < p_buttons.size(); i++) {
+		UIAlertAction *action = [UIAlertAction actionWithTitle:[NSString stringWithUTF8String:p_buttons[i].utf8().get_data()]
+														 style:i == p_destructive_button ? UIAlertActionStyleDestructive : (i == p_cancel_button ? UIAlertActionStyleCancel : UIAlertActionStyleDefault)
+													   handler:^(UIAlertAction *) {
+														   if (callback.is_valid()) {
+															   callback.call_deferred(i);
+														   }
+													   }];
+		[alert addAction:action];
+	}
+	return _present_alert(alert);
+}
+
+Error DisplayServerAppleEmbedded::dialog_input_text(String p_title, String p_description, String p_partial, const Callable &p_callback) {
+	UIAlertController *alert = [UIAlertController alertControllerWithTitle:[NSString stringWithUTF8String:p_title.utf8().get_data()]
+																   message:[NSString stringWithUTF8String:p_description.utf8().get_data()]
+															preferredStyle:UIAlertControllerStyleAlert];
+	NSString *partial = [NSString stringWithUTF8String:p_partial.utf8().get_data()];
+	[alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+		field.text = partial;
+	}];
+	const Callable callback = p_callback;
+	// As on other platforms, the dialog has one button and reports the text.
+	__weak UIAlertController *weak_alert = alert;
+	UIAlertAction *ok = [UIAlertAction actionWithTitle:@"OK"
+												 style:UIAlertActionStyleDefault
+											   handler:^(UIAlertAction *) {
+												   String text;
+												   text.append_utf8(weak_alert.textFields.firstObject.text.UTF8String ?: "");
+												   if (callback.is_valid()) {
+													   callback.call_deferred(text);
+												   }
+											   }];
+	[alert addAction:ok];
+	return _present_alert(alert);
+}
+#endif
 
 Error DisplayServerAppleEmbedded::file_dialog_show(const String &p_title, const String &p_current_directory, const String &p_filename, bool p_show_hidden, DisplayServerEnums::FileDialogMode p_mode, const Vector<String> &p_filters, const Callable &p_callback, DisplayServerEnums::WindowID p_window_id) {
 	return AppleNativeFileDialog::show(p_title, p_current_directory, p_mode, p_filters, p_callback, p_window_id);

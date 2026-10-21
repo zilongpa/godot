@@ -749,6 +749,21 @@
 		<member name="nonclient_area" type="Rect2i" setter="set_nonclient_area" getter="get_nonclient_area" default="Rect2i(0, 0, 0, 0)">
 			If set, defines the window's custom decoration area which will receive mouse input, even if normal input to the window is blocked (such as when it has an exclusive child opened). See also [signal nonclient_window_input].
 		</member>
+		<member name="ornament_alignment" type="int" setter="set_ornament_alignment" getter="get_ornament_alignment" enum="Window.OrnamentAlignment">
+			Where an ornament lies relative to its [member ornament_anchor]. [constant ORNAMENT_ALIGNMENT_AUTOMATIC] keeps it outside the window it is attached to: at the bottom edge it hangs below, at the leading edge it sits before it, and so on.
+		</member>
+		<member name="ornament_anchor" type="Vector3" setter="set_ornament_anchor" getter="get_ornament_anchor">
+			The point of [member placement_target] an ornament is attached to, in unit coordinates as SwiftUI's [code]UnitPoint3D[/code]: [code]x[/code] from the leading ([code]0[/code]) to the trailing edge ([code]1[/code]), [code]y[/code] from the top ([code]0[/code]) to the bottom ([code]1[/code]), and [code]z[/code] from the back ([code]0[/code]) to the front ([code]1[/code]) of a volume. 2D windows ignore [code]z[/code]. Only used when [member placement] is [constant PLACEMENT_ORNAMENT].
+		</member>
+		<member name="ornament_anchor_preset" type="int" setter="set_ornament_anchor_preset" getter="get_ornament_anchor_preset" enum="Window.OrnamentAnchorPreset">
+			A named point for [member ornament_anchor]: choosing one sets the anchor's [code]x[/code] and [code]y[/code], keeping [code]z[/code]. Reads [constant ORNAMENT_ANCHOR_CUSTOM] when the anchor is between named points. Not stored.
+		</member>
+		<member name="placement" type="int" setter="set_placement" getter="get_placement" enum="Window.Placement" default="0">
+			Where the window first appears relative to [member placement_target], on platforms that arrange windows themselves, or which edge of it the window is attached to as an ornament. Only visionOS uses it; elsewhere use [member initial_position]. The person can move windows afterwards, but not ornaments.
+		</member>
+		<member name="placement_target" type="NodePath" setter="set_placement_target" getter="get_placement_target" default="NodePath(&quot;&quot;)">
+			The [Window] that [member placement] refers to. If empty, the window this one is in.
+		</member>
 		<member name="popup_window" type="bool" setter="set_flag" getter="get_flag" default="false">
 			If [code]true[/code], the [Window] will be considered a popup. Popups are sub-windows that don't show as separate windows in system's window manager's window list and will send close request when anything is clicked outside of them (unless [member exclusive] is enabled).
 		</member>
@@ -1059,6 +1074,87 @@
 		</constant>
 		<constant name="WINDOW_INITIAL_POSITION_CENTER_SCREEN_WITH_KEYBOARD_FOCUS" value="5" enum="WindowInitialPosition">
 			Initial window position is the center of the screen containing the window with the keyboard focus.
+		</constant>
+		<constant name="PLACEMENT_AUTOMATIC" value="0" enum="Placement">
+			The system chooses where the window appears.
+		</constant>
+		<constant name="PLACEMENT_UTILITY_PANEL" value="1" enum="Placement">
+			The window appears close to the person, as a utility panel.
+		</constant>
+		<constant name="PLACEMENT_LEADING" value="2" enum="Placement">
+			The window appears to the leading side of [member placement_target].
+		</constant>
+		<constant name="PLACEMENT_TRAILING" value="3" enum="Placement">
+			The window appears to the trailing side of [member placement_target].
+		</constant>
+		<constant name="PLACEMENT_ABOVE" value="4" enum="Placement">
+			The window appears above [member placement_target].
+		</constant>
+		<constant name="PLACEMENT_BELOW" value="5" enum="Placement">
+			The window appears below [member placement_target].
+		</constant>
+		<constant name="PLACEMENT_ORNAMENT" value="6" enum="Placement">
+			The window is an ornament of [member placement_target], attached at [member ornament_anchor] and moving with it. It is shown only while that window is, and its [member size] sets the ornament's size; the person cannot move or resize it. A window has at most eight ornaments.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_CUSTOM" value="0" enum="OrnamentAnchorPreset">
+			The anchor is not one of the named points.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_TOP_LEADING" value="1" enum="OrnamentAnchorPreset">
+			The top leading corner of the window.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_TOP" value="2" enum="OrnamentAnchorPreset">
+			The middle of the top edge of the window.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_TOP_TRAILING" value="3" enum="OrnamentAnchorPreset">
+			The top trailing corner of the window.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_LEADING" value="4" enum="OrnamentAnchorPreset">
+			The middle of the leading edge of the window.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_CENTER" value="5" enum="OrnamentAnchorPreset">
+			The center of the window.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_TRAILING" value="6" enum="OrnamentAnchorPreset">
+			The middle of the trailing edge of the window.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_BOTTOM_LEADING" value="7" enum="OrnamentAnchorPreset">
+			The bottom leading corner of the window.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_BOTTOM" value="8" enum="OrnamentAnchorPreset">
+			The middle of the bottom edge of the window.
+		</constant>
+		<constant name="ORNAMENT_ANCHOR_BOTTOM_TRAILING" value="9" enum="OrnamentAnchorPreset">
+			The bottom trailing corner of the window.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_AUTOMATIC" value="0" enum="OrnamentAlignment">
+			The ornament lies outside the window, away from its anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_TOP_LEADING" value="1" enum="OrnamentAlignment">
+			The ornament's top leading corner is at the anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_TOP" value="2" enum="OrnamentAlignment">
+			The ornament's middle of the top edge is at the anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_TOP_TRAILING" value="3" enum="OrnamentAlignment">
+			The ornament's top trailing corner is at the anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_LEADING" value="4" enum="OrnamentAlignment">
+			The ornament's middle of the leading edge is at the anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_CENTER" value="5" enum="OrnamentAlignment">
+			The ornament's center is at the anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_TRAILING" value="6" enum="OrnamentAlignment">
+			The ornament's middle of the trailing edge is at the anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_BOTTOM_LEADING" value="7" enum="OrnamentAlignment">
+			The ornament's bottom leading corner is at the anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_BOTTOM" value="8" enum="OrnamentAlignment">
+			The ornament's middle of the bottom edge is at the anchor.
+		</constant>
+		<constant name="ORNAMENT_ALIGNMENT_BOTTOM_TRAILING" value="9" enum="OrnamentAlignment">
+			The ornament's bottom trailing corner is at the anchor.
 		</constant>
 	</constants>
 	<theme_items>

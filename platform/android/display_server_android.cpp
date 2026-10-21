@@ -203,7 +203,7 @@ bool DisplayServerAndroid::clipboard_has() const {
 	}
 }
 
-Error DisplayServerAndroid::dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback) {
+Error DisplayServerAndroid::dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback, int p_destructive_button, int p_cancel_button) {
 	GodotJavaWrapper *godot_java = OS_Android::get_singleton()->get_godot_java();
 	ERR_FAIL_NULL_V(godot_java, FAILED);
 	dialog_callback = p_callback;

@@ -1342,8 +1342,9 @@ void PopupMenu::_notification(int p_what) {
 				accessibility_scroll_element = AccessibilityServer::get_singleton()->create_sub_element(ae, AccessibilityServerEnums::AccessibilityRole::ROLE_CONTAINER);
 			}
 
+			// Items are laid out in `control`, inside the panel's margins and moved by scrolling.
 			Transform2D scroll_xform;
-			scroll_xform.set_origin(Vector2i(0, -scroll_container->get_v_scroll_bar()->get_value()));
+			scroll_xform.set_origin(control->get_global_position());
 			AccessibilityServer::get_singleton()->update_set_transform(accessibility_scroll_element, scroll_xform);
 			AccessibilityServer::get_singleton()->update_set_bounds(accessibility_scroll_element, Rect2(0, 0, get_size().x, scroll_container->get_v_scroll_bar()->get_max()));
 
@@ -1392,7 +1393,8 @@ void PopupMenu::_notification(int p_what) {
 					AccessibilityServer::get_singleton()->update_set_flag(item.accessibility_item_element, AccessibilityServerEnums::AccessibilityFlags::FLAG_DISABLED, item.disabled);
 					AccessibilityServer::get_singleton()->update_set_tooltip(item.accessibility_item_element, item.tooltip);
 
-					AccessibilityServer::get_singleton()->update_set_bounds(item.accessibility_item_element, Rect2(item_ofs, Size2(display_width, h + theme_cache.v_separation)));
+					// The same rectangle as the drawn hover highlight.
+					AccessibilityServer::get_singleton()->update_set_bounds(item.accessibility_item_element, Rect2(Point2(0, ofs.y - theme_cache.v_separation / 2), Size2(display_width, h + theme_cache.v_separation)));
 
 					item.accessibility_item_dirty = false;
 				}
@@ -2882,27 +2884,6 @@ int PopupMenu::get_item_count() const {
 	return items.size();
 }
 
-Rect2 PopupMenu::get_item_rect(int p_idx, bool p_clipped) const {
-	if (p_idx < 0) {
-		p_idx += items.size();
-	}
-	ERR_FAIL_INDEX_V(p_idx, items.size(), Rect2());
-	const Item &item = items[p_idx];
-	if (!is_visible() || is_native_menu() || !item.visible || item._height_cache <= 0) {
-		return Rect2();
-	}
-
-	// Use the same cached layout as the drawn hover highlight, including scrolling.
-	Rect2 rect(Point2(0, item._ofs_cache - theme_cache.v_separation / 2),
-			Size2(control->get_size().width, item._height_cache + theme_cache.v_separation));
-	rect = control->get_global_transform_with_canvas().xform(rect);
-	if (p_clipped) {
-		const Rect2 clip = scroll_container->get_global_transform_with_canvas().xform(Rect2(Point2(), scroll_container->get_size()));
-		rect = rect.intersection(clip);
-	}
-	return rect;
-}
-
 void PopupMenu::scroll_to_item(int p_idx) {
 	ERR_FAIL_INDEX(p_idx, items.size());
 
@@ -3401,7 +3382,6 @@ void PopupMenu::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_focused_item"), &PopupMenu::get_focused_item);
 	ClassDB::bind_method(D_METHOD("set_item_count", "count"), &PopupMenu::set_item_count);
 	ClassDB::bind_method(D_METHOD("get_item_count"), &PopupMenu::get_item_count);
-	ClassDB::bind_method(D_METHOD("get_item_rect", "index", "clipped"), &PopupMenu::get_item_rect, DEFVAL(true));
 
 	ClassDB::bind_method(D_METHOD("scroll_to_item", "index"), &PopupMenu::scroll_to_item);
 

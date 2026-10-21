@@ -397,6 +397,10 @@ public:
 	virtual void window_set_drop_files_callback(const Callable &p_callable, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) = 0;
 
 	virtual void window_set_title(const String &p_title, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) = 0;
+	// Initial placement relative to another window (see Window::Placement), for
+	// platforms that arrange windows themselves. Set before show_window().
+	// p_ornament_anchor and p_ornament_alignment describe ornaments (see Window::OrnamentAlignment).
+	virtual void window_set_placement(int p_placement, DisplayServerEnums::WindowID p_target, const Vector3 &p_ornament_anchor, int p_ornament_alignment, DisplayServerEnums::WindowID p_window) {}
 	virtual Size2i window_get_title_size(const String &p_title, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID) const { return Size2i(); }
 
 	virtual void window_set_mouse_passthrough(const Vector<Vector2> &p_region, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID);
@@ -500,7 +504,7 @@ public:
 
 	virtual bool get_swap_cancel_ok();
 
-	virtual Error dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback);
+	virtual Error dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback, int p_destructive_button = -1, int p_cancel_button = -1);
 	virtual Error dialog_input_text(String p_title, String p_description, String p_partial, const Callable &p_callback);
 
 	// Cancel only the request owned by this callback. Backends without cancellation may ignore it.

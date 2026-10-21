@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  file_access_apple_embedded.h                                                      */
+/*  file_access_apple_embedded.h                                          */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -31,6 +31,7 @@
 #pragma once
 
 #include "drivers/unix/file_access_unix.h"
+
 #import <Foundation/Foundation.h>
 
 class FileAccessAppleEmbedded : public FileAccessUnix {

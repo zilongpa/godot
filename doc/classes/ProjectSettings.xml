@@ -284,6 +284,9 @@
 			- [b]Disabled[/b] ([code]2[/code]): Accessibility support is fully disabled.
 			[b]Note:[/b] Accessibility debugging tools, such as Accessibility Insights for Windows, Accessibility Inspector (macOS), or AT-SPI Browser (Linux/BSD), do not count as assistive apps. To test your project with these tools, use [b]Always Active[/b].
 		</member>
+		<member name="accessibility/general/accessibility_support.visionos" type="int" setter="" getter="" default="1">
+			visionOS override for [member accessibility/general/accessibility_support]. Native hover effects follow the accessibility tree, so it is always kept up to date.
+		</member>
 		<member name="accessibility/general/updates_per_second" type="int" setter="" getter="" default="60">
 			The number of accessibility information updates per second.
 		</member>
@@ -1001,6 +1004,9 @@
 		<member name="display/window/per_pixel_transparency/allowed" type="bool" setter="" getter="" default="false">
 			If [code]true[/code], allows per-pixel transparency for the window background. This affects performance, so leave it on [code]false[/code] unless you need it. See also [member display/window/size/transparent] and [member rendering/viewport/transparent_background].
 		</member>
+		<member name="display/window/per_pixel_transparency/allowed.visionos" type="bool" setter="" getter="" default="true">
+			visionOS override for [member display/window/per_pixel_transparency/allowed]. Windows show the system glass behind their content (see [member display/window/visionos/glass_background]).
+		</member>
 		<member name="display/window/size/always_on_top" type="bool" setter="" getter="" default="false">
 			Forces the main window to be always on top.
 			[b]Note:[/b] This setting is ignored on iOS, Android, and Web.
@@ -1100,6 +1106,12 @@
 			If [code]true[/code], subwindows are embedded in the main window (this is also called single-window mode). Single-window mode can be faster as it does not need to create a separate window for every popup and tooltip, which can be a slow operation depending on the operating system and rendering method in use.
 			If [code]false[/code], subwindows are created as separate windows (this is also called multi-window mode). This allows them to be moved outside the main window and use native operating system window decorations.
 			This is equivalent to [member EditorSettings.interface/editor/display/single_window_mode] in the editor.
+		</member>
+		<member name="display/window/subwindows/embed_subwindows.visionos" type="bool" setter="" getter="" default="false">
+			visionOS override for [member display/window/subwindows/embed_subwindows]. Every [Window] opens as its own native window, volume or ornament; popups stay embedded.
+		</member>
+		<member name="display/window/visionos/glass_background" type="bool" setter="" getter="" default="true">
+			If [code]true[/code], every native window on visionOS shows the system glass behind its content: the window is transparent and its viewport clears to a transparent background, as if [member display/window/size/transparent], [member rendering/viewport/transparent_background], [member Window.transparent] and [member Viewport.transparent_bg] were enabled. Disable it to draw opaque windows. Has no effect on other platforms.
 		</member>
 		<member name="display/window/vsync/vsync_mode" type="int" setter="" getter="" default="1" keywords="adaptive, mailbox">
 			Sets the V-Sync mode for the main game window. The editor's own V-Sync mode can be set using [member EditorSettings.interface/editor/display/vsync_mode].

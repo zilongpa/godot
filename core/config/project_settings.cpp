@@ -1709,6 +1709,8 @@ ProjectSettings::ProjectSettings() {
 	GLOBAL_DEF("application/config/quit_on_go_back", true);
 
 	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "accessibility/general/accessibility_support", PROPERTY_HINT_ENUM, "Auto (When Screen Reader is Running),Always Active,Disabled"), 0);
+	// visionOS hover effects follow the accessibility tree, so keep it current.
+	GLOBAL_DEF("accessibility/general/accessibility_support.visionos", 1);
 	GLOBAL_DEF_BASIC(PropertyInfo(Variant::INT, "accessibility/general/updates_per_second", PROPERTY_HINT_RANGE, "1,100,1"), 60);
 	GLOBAL_DEF(PropertyInfo(Variant::STRING, "accessibility/general/accessibility_driver", PROPERTY_HINT_ENUM, "accesskit,dummy"), "accesskit");
 
@@ -1765,6 +1767,9 @@ ProjectSettings::ProjectSettings() {
 	// Keep the enum values in sync with the `DisplayServerEnums::ScreenOrientation` enum.
 	custom_prop_info["display/window/handheld/orientation"] = PropertyInfo(Variant::INT, "display/window/handheld/orientation", PROPERTY_HINT_ENUM, "Landscape,Portrait,Reverse Landscape,Reverse Portrait,Sensor Landscape,Sensor Portrait,Sensor");
 	GLOBAL_DEF("display/window/subwindows/embed_subwindows", true);
+	// visionOS opens every Window as its own native window, volume or ornament.
+	GLOBAL_DEF("display/window/subwindows/embed_subwindows.visionos", false);
+	GLOBAL_DEF_BASIC("display/window/visionos/glass_background", true);
 	// Keep the enum values in sync with the `DisplayServerEnums::VSyncMode` enum.
 	custom_prop_info["display/window/vsync/vsync_mode"] = PropertyInfo(Variant::INT, "display/window/vsync/vsync_mode", PROPERTY_HINT_ENUM, "Disabled,Enabled,Adaptive,Mailbox");
 

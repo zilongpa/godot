@@ -881,7 +881,7 @@ Callable DisplayServerMacOS::_help_get_action_callback() const {
 	return help_action_callback;
 }
 
-Error DisplayServerMacOS::dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback) {
+Error DisplayServerMacOS::dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback, int p_destructive_button, int p_cancel_button) {
 	_THREAD_SAFE_METHOD_
 
 	NSAlert *window = [[NSAlert alloc] init];
@@ -890,7 +890,13 @@ Error DisplayServerMacOS::dialog_show(String p_title, String p_description, Vect
 
 	for (int i = 0; i < p_buttons.size(); i++) {
 		NSString *ns_button = [NSString stringWithUTF8String:p_buttons[i].utf8().get_data()];
-		[window addButtonWithTitle:ns_button];
+		NSButton *button = [window addButtonWithTitle:ns_button];
+		if (i == p_destructive_button) {
+			button.hasDestructiveAction = YES;
+		}
+		if (i == p_cancel_button) {
+			button.keyEquivalent = @"\033";
+		}
 	}
 	[window setMessageText:ns_title];
 	[window setInformativeText:ns_description];

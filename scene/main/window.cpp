@@ -246,7 +246,9 @@ void Window::_get_property_list(List<PropertyInfo> *p_list) const {
 }
 
 void Window::_validate_property(PropertyInfo &p_property) const {
-	if (p_property.name == "position") {
+	if (p_property.name.begins_with("ornament_") && placement != PLACEMENT_ORNAMENT) {
+		p_property.usage = PROPERTY_USAGE_NONE;
+	} else if (p_property.name == "position") {
 		if (initial_position != WINDOW_INITIAL_POSITION_ABSOLUTE) {
 			p_property.usage = PROPERTY_USAGE_NONE;
 		}
@@ -351,6 +353,83 @@ void Window::set_initial_position(Window::WindowInitialPosition p_initial_positi
 Window::WindowInitialPosition Window::get_initial_position() const {
 	ERR_READ_THREAD_GUARD_V(WINDOW_INITIAL_POSITION_ABSOLUTE);
 	return initial_position;
+}
+
+void Window::set_placement(Placement p_placement) {
+	ERR_MAIN_THREAD_GUARD;
+	placement = p_placement;
+	notify_property_list_changed();
+}
+
+Window::Placement Window::get_placement() const {
+	ERR_READ_THREAD_GUARD_V(PLACEMENT_AUTOMATIC);
+	return placement;
+}
+
+void Window::set_placement_target(const NodePath &p_target) {
+	ERR_MAIN_THREAD_GUARD;
+	placement_target = p_target;
+}
+
+NodePath Window::get_placement_target() const {
+	ERR_READ_THREAD_GUARD_V(NodePath());
+	return placement_target;
+}
+
+void Window::set_ornament_anchor(const Vector3 &p_anchor) {
+	ERR_MAIN_THREAD_GUARD;
+	ornament_anchor = p_anchor;
+}
+
+Vector3 Window::get_ornament_anchor() const {
+	ERR_READ_THREAD_GUARD_V(Vector3());
+	return ornament_anchor;
+}
+
+static constexpr int ornament_anchor_preset_count = 10;
+static const Vector2 ornament_anchor_points[ornament_anchor_preset_count] = {
+	Vector2(), // Custom.
+	Vector2(0, 0),
+	Vector2(0.5, 0),
+	Vector2(1, 0),
+	Vector2(0, 0.5),
+	Vector2(0.5, 0.5),
+	Vector2(1, 0.5),
+	Vector2(0, 1),
+	Vector2(0.5, 1),
+	Vector2(1, 1),
+};
+
+void Window::set_ornament_anchor_preset(OrnamentAnchorPreset p_preset) {
+	ERR_MAIN_THREAD_GUARD;
+	ERR_FAIL_INDEX(int(p_preset), ornament_anchor_preset_count);
+	if (p_preset == ORNAMENT_ANCHOR_CUSTOM) {
+		return;
+	}
+	// A shortcut for the anchor's horizontal and vertical position; depth is kept.
+	ornament_anchor.x = ornament_anchor_points[p_preset].x;
+	ornament_anchor.y = ornament_anchor_points[p_preset].y;
+	notify_property_list_changed();
+}
+
+Window::OrnamentAnchorPreset Window::get_ornament_anchor_preset() const {
+	ERR_READ_THREAD_GUARD_V(ORNAMENT_ANCHOR_CUSTOM);
+	for (int i = ORNAMENT_ANCHOR_TOP_LEADING; i < ornament_anchor_preset_count; i++) {
+		if (Vector2(ornament_anchor.x, ornament_anchor.y).is_equal_approx(ornament_anchor_points[i])) {
+			return OrnamentAnchorPreset(i);
+		}
+	}
+	return ORNAMENT_ANCHOR_CUSTOM;
+}
+
+void Window::set_ornament_alignment(OrnamentAlignment p_alignment) {
+	ERR_MAIN_THREAD_GUARD;
+	ornament_alignment = p_alignment;
+}
+
+Window::OrnamentAlignment Window::get_ornament_alignment() const {
+	ERR_READ_THREAD_GUARD_V(ORNAMENT_ALIGNMENT_AUTOMATIC);
+	return ornament_alignment;
 }
 
 void Window::set_current_screen(int p_screen) {
@@ -696,6 +775,17 @@ bool Window::is_in_edited_scene_root() const {
 void Window::_make_window() {
 	ERR_FAIL_COND(window_id != DisplayServerEnums::INVALID_WINDOW_ID);
 
+	// An ornament exists only while the window it is attached to does.
+	if (_is_ornament()) {
+		Window *target = _get_placement_target();
+		if (target && !target->ornaments.has(get_instance_id())) {
+			target->ornaments.push_back(get_instance_id());
+		}
+		if (!target || target->window_id == DisplayServerEnums::INVALID_WINDOW_ID) {
+			return;
+		}
+	}
+
 	if (transient && transient_to_focused) {
 		_make_transient();
 	}
@@ -706,6 +796,13 @@ void Window::_make_window() {
 			f |= (1 << i);
 		}
 	}
+#ifdef VISIONOS_ENABLED
+	// Native windows show the system glass behind their content unless disabled.
+	if (bool(GLOBAL_GET("display/window/visionos/glass_background"))) {
+		f |= (1 << FLAG_TRANSPARENT);
+		set_transparent_background(true);
+	}
+#endif
 
 	DisplayServerEnums::VSyncMode vsync_mode = DisplayServer::get_singleton()->window_get_vsync_mode(DisplayServerEnums::MAIN_WINDOW_ID);
 	Rect2i window_rect;
@@ -746,7 +843,40 @@ void Window::_make_window() {
 	_update_window_callbacks();
 
 	RS::get_singleton()->viewport_set_update_mode(get_viewport_rid(), RSE::VIEWPORT_UPDATE_WHEN_VISIBLE);
+
+	// Place relative to placement_target, or else the window this one is in.
+	DisplayServerEnums::WindowID target_id = DisplayServerEnums::MAIN_WINDOW_ID;
+	const Window *target = _get_placement_target();
+	if (target && target->window_id != DisplayServerEnums::INVALID_WINDOW_ID) {
+		target_id = target->window_id;
+	}
+	DisplayServer::get_singleton()->window_set_placement(int(placement), target_id, ornament_anchor, int(ornament_alignment), window_id);
 	DisplayServer::get_singleton()->show_window(window_id);
+
+	// Ornaments attached to this window appear with it.
+	for (const ObjectID &id : ornaments) {
+		Window *ornament = ObjectDB::get_instance<Window>(id);
+		if (ornament && ornament->is_inside_tree() && ornament->visible && ornament->window_id == DisplayServerEnums::INVALID_WINDOW_ID && ornament->_get_placement_target() == this) {
+			ornament->_make_window();
+		}
+	}
+}
+
+Window *Window::_get_placement_target() const {
+	if (placement_target.is_empty()) {
+		// The window this one is in, shown or not: an ornament waits for it.
+		for (Node *node = get_parent(); node; node = node->get_parent()) {
+			if (Window *window = Object::cast_to<Window>(node)) {
+				return window;
+			}
+		}
+		return nullptr;
+	}
+	Window *target = Object::cast_to<Window>(get_node_or_null(placement_target));
+	if (!target) {
+		WARN_PRINT(vformat("Window \"%s\" places itself relative to \"%s\", which is not a Window.", get_name(), placement_target));
+	}
+	return target;
 }
 
 void Window::_update_from_window() {
@@ -759,6 +889,14 @@ void Window::_update_from_window() {
 
 void Window::_clear_window() {
 	ERR_FAIL_COND(window_id == DisplayServerEnums::INVALID_WINDOW_ID);
+
+	// Ornaments go with this window, and come back when it is shown again.
+	for (const ObjectID &id : ornaments) {
+		Window *ornament = ObjectDB::get_instance<Window>(id);
+		if (ornament && ornament->window_id != DisplayServerEnums::INVALID_WINDOW_ID) {
+			ornament->_clear_window();
+		}
+	}
 
 	bool had_focus = has_focus();
 
@@ -1482,8 +1620,16 @@ Viewport *Window::get_embedder() const {
 
 	Viewport *vp = get_parent_viewport();
 
+#ifdef VISIONOS_ENABLED
+	// Popups (menus, tooltips) belong inside the window that shows them; as
+	// separate windows, the system would place them anywhere in the room.
+	const bool embed_popup = flags[FLAG_POPUP];
+#else
+	const bool embed_popup = false;
+#endif
+
 	while (vp) {
-		if (vp->is_embedding_subwindows()) {
+		if (vp->is_embedding_subwindows() || embed_popup) {
 			return vp;
 		}
 
@@ -3255,6 +3401,10 @@ Transform2D Window::get_popup_base_transform_native() const {
 
 Transform2D Window::get_popup_base_transform() const {
 	ERR_READ_THREAD_GUARD_V(Transform2D());
+#ifdef VISIONOS_ENABLED
+	// Every window embeds its own popups (see get_embedder()).
+	return Transform2D();
+#endif
 	if (is_embedding_subwindows()) {
 		return Transform2D();
 	}
@@ -3358,6 +3508,17 @@ void Window::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("set_initial_position", "initial_position"), &Window::set_initial_position);
 	ClassDB::bind_method(D_METHOD("get_initial_position"), &Window::get_initial_position);
+
+	ClassDB::bind_method(D_METHOD("set_placement", "placement"), &Window::set_placement);
+	ClassDB::bind_method(D_METHOD("get_placement"), &Window::get_placement);
+	ClassDB::bind_method(D_METHOD("set_placement_target", "target"), &Window::set_placement_target);
+	ClassDB::bind_method(D_METHOD("get_placement_target"), &Window::get_placement_target);
+	ClassDB::bind_method(D_METHOD("set_ornament_anchor", "anchor"), &Window::set_ornament_anchor);
+	ClassDB::bind_method(D_METHOD("get_ornament_anchor"), &Window::get_ornament_anchor);
+	ClassDB::bind_method(D_METHOD("set_ornament_anchor_preset", "preset"), &Window::set_ornament_anchor_preset);
+	ClassDB::bind_method(D_METHOD("get_ornament_anchor_preset"), &Window::get_ornament_anchor_preset);
+	ClassDB::bind_method(D_METHOD("set_ornament_alignment", "alignment"), &Window::set_ornament_alignment);
+	ClassDB::bind_method(D_METHOD("get_ornament_alignment"), &Window::get_ornament_alignment);
 
 	ClassDB::bind_method(D_METHOD("set_current_screen", "index"), &Window::set_current_screen);
 	ClassDB::bind_method(D_METHOD("get_current_screen"), &Window::get_current_screen);
@@ -3549,6 +3710,13 @@ void Window::_bind_methods() {
 
 	// Keep the enum values in sync with the `WindowInitialPosition` enum.
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "initial_position", PROPERTY_HINT_ENUM, "Absolute,Center of Primary Screen,Center of Main Window Screen,Center of Other Screen,Center of Screen With Mouse Pointer,Center of Screen With Keyboard Focus"), "set_initial_position", "get_initial_position");
+	// Keep the enum values in sync with the `Placement` enum.
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "placement", PROPERTY_HINT_ENUM, "Automatic,Utility Panel,Leading,Trailing,Above,Below,Ornament"), "set_placement", "get_placement");
+	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "placement_target", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "Window"), "set_placement_target", "get_placement_target");
+	// The preset only edits the anchor; it is not stored.
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "ornament_anchor_preset", PROPERTY_HINT_ENUM, "Custom,Top Leading,Top,Top Trailing,Leading,Center,Trailing,Bottom Leading,Bottom,Bottom Trailing", PROPERTY_USAGE_EDITOR), "set_ornament_anchor_preset", "get_ornament_anchor_preset");
+	ADD_PROPERTY(PropertyInfo(Variant::VECTOR3, "ornament_anchor", PROPERTY_HINT_RANGE, "0,1,0.01"), "set_ornament_anchor", "get_ornament_anchor");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "ornament_alignment", PROPERTY_HINT_ENUM, "Automatic,Top Leading,Top,Top Trailing,Leading,Center,Trailing,Bottom Leading,Bottom,Bottom Trailing"), "set_ornament_alignment", "get_ornament_alignment");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "position", PROPERTY_HINT_NONE, "suffix:px"), "set_position", "get_position");
 	ADD_PROPERTY(PropertyInfo(Variant::VECTOR2I, "size", PROPERTY_HINT_NONE, "suffix:px"), "set_size", "get_size");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "current_screen", PROPERTY_HINT_RANGE, "0,64,1,or_greater"), "set_current_screen", "get_current_screen");
@@ -3674,6 +3842,36 @@ void Window::_bind_methods() {
 	BIND_ENUM_CONSTANT(WINDOW_INITIAL_POSITION_CENTER_OTHER_SCREEN);
 	BIND_ENUM_CONSTANT(WINDOW_INITIAL_POSITION_CENTER_SCREEN_WITH_MOUSE_FOCUS);
 	BIND_ENUM_CONSTANT(WINDOW_INITIAL_POSITION_CENTER_SCREEN_WITH_KEYBOARD_FOCUS);
+
+	BIND_ENUM_CONSTANT(PLACEMENT_AUTOMATIC);
+	BIND_ENUM_CONSTANT(PLACEMENT_UTILITY_PANEL);
+	BIND_ENUM_CONSTANT(PLACEMENT_LEADING);
+	BIND_ENUM_CONSTANT(PLACEMENT_TRAILING);
+	BIND_ENUM_CONSTANT(PLACEMENT_ABOVE);
+	BIND_ENUM_CONSTANT(PLACEMENT_BELOW);
+	BIND_ENUM_CONSTANT(PLACEMENT_ORNAMENT);
+
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_CUSTOM);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_TOP_LEADING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_TOP);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_TOP_TRAILING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_LEADING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_CENTER);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_TRAILING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_BOTTOM_LEADING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_BOTTOM);
+	BIND_ENUM_CONSTANT(ORNAMENT_ANCHOR_BOTTOM_TRAILING);
+
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_AUTOMATIC);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_TOP_LEADING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_TOP);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_TOP_TRAILING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_LEADING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_CENTER);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_TRAILING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_BOTTOM_LEADING);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_BOTTOM);
+	BIND_ENUM_CONSTANT(ORNAMENT_ALIGNMENT_BOTTOM_TRAILING);
 
 	GDVIRTUAL_BIND(_get_contents_minimum_size);
 

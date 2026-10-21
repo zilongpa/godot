@@ -55,7 +55,5 @@ public:
 	String get_model() const;
 	String get_rate_url(int p_app_id) const;
 
-	void set_native_dialog_host_callbacks(const Callable &p_get_host, const Callable &p_finished);
-
 	AppleEmbedded();
 };

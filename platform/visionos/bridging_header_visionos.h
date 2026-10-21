@@ -33,3 +33,5 @@
 #import "godot_app_delegate_service_visionos.h"
 #import "godot_app_delegate_visionos.h"
 #import "godot_compositor_services_renderer.h"
+
+#import "drivers/apple_embedded/godot_visionos_windows.h"

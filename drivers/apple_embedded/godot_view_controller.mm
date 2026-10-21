@@ -172,21 +172,24 @@
 
 - (void)viewDidAppear:(BOOL)animated {
 	[super viewDidAppear:animated];
-	#if defined(VISIONOS_ENABLED)
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(visionosWindowBecameKey:) name:UIWindowDidBecomeKeyNotification object:self.view.window];
+#if defined(VISIONOS_ENABLED)
+	[[NSNotificationCenter defaultCenter] addObserver:self
+											 selector:@selector(visionosWindowBecameKey:)
+												 name:UIWindowDidBecomeKeyNotification
+											   object:self.view.window];
 	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(visionosWindowResignedKey:) name:UIWindowDidResignKeyNotification object:self.view.window];
 	if (self.godotWindowID != DisplayServerEnums::MAIN_WINDOW_ID) {
 		[self godotAttachWindowIfReady];
 		return;
 	}
-	#endif
+#endif
 	[self.godotView startRendering];
-	#if defined(VISIONOS_ENABLED)
+#if defined(VISIONOS_ENABLED)
 	if (DisplayServerAppleEmbedded::get_singleton()) {
 		DisplayServerAppleEmbedded::get_singleton()->connect_visionos_window(self.godotWindowID, (__bridge void *)self);
 		DisplayServerAppleEmbedded::get_singleton()->focus_visionos_window(self.godotWindowID, self.view.window.isKeyWindow);
 	}
-	#endif
+#endif
 #ifdef IOS_ENABLED
 	[self propagateUIPreferencesToRootViewController];
 #endif
@@ -194,7 +197,9 @@
 
 - (void)godotAttachWindowIfReady {
 #if defined(VISIONOS_ENABLED)
-	if (self.godotWindowID == DisplayServerEnums::MAIN_WINDOW_ID || !self.viewIfLoaded.window) { return; }
+	if (self.godotWindowID == DisplayServerEnums::MAIN_WINDOW_ID || !self.viewIfLoaded.window) {
+		return;
+	}
 	if (DisplayServerAppleEmbedded *display = DisplayServerAppleEmbedded::get_singleton()) {
 		display->connect_visionos_window(self.godotWindowID, (__bridge void *)self);
 		display->focus_visionos_window(self.godotWindowID, self.view.window.isKeyWindow);
@@ -203,8 +208,10 @@
 }
 
 - (void)viewDidDisappear:(BOOL)animated {
-	#if defined(VISIONOS_ENABLED)
-	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIWindowDidBecomeKeyNotification object:self.view.window];
+#if defined(VISIONOS_ENABLED)
+	[[NSNotificationCenter defaultCenter] removeObserver:self
+													name:UIWindowDidBecomeKeyNotification
+												  object:self.view.window];
 	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIWindowDidResignKeyNotification object:self.view.window];
 	if (DisplayServerAppleEmbedded::get_singleton()) {
 		DisplayServerAppleEmbedded::get_singleton()->focus_visionos_window(self.godotWindowID, false);
@@ -216,10 +223,10 @@
 		[super viewDidDisappear:animated];
 		return;
 	}
-	#endif
-	#if !defined(VISIONOS_ENABLED)
+#endif
+#if !defined(VISIONOS_ENABLED)
 	[self.godotView stopRendering];
-	#endif
+#endif
 	[super viewDidDisappear:animated];
 }
 
@@ -284,6 +291,13 @@
 }
 
 - (void)dealloc {
+#if defined(VISIONOS_ENABLED)
+	// SwiftUI can free a controller without disconnecting its scene first, for
+	// example an ornament's, whose scene belongs to the window it is attached to.
+	if (self.godotWindowID != DisplayServerEnums::MAIN_WINDOW_ID && DisplayServerAppleEmbedded::get_singleton()) {
+		DisplayServerAppleEmbedded::get_singleton()->release_visionos_window(self.godotWindowID, (__bridge void *)self);
+	}
+#endif
 	self.keyboardView = nil;
 
 	self.renderer = nil;

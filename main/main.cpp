@@ -2688,7 +2688,12 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		if (bool(GLOBAL_GET("display/window/size/always_on_top"))) {
 			window_flags |= DisplayServerEnums::WINDOW_FLAG_ALWAYS_ON_TOP_BIT;
 		}
-		if (bool(GLOBAL_GET("display/window/size/transparent"))) {
+		bool transparent = GLOBAL_GET("display/window/size/transparent");
+#ifdef VISIONOS_ENABLED
+		// Windows show the system glass behind their content unless disabled.
+		transparent = transparent || bool(GLOBAL_GET("display/window/visionos/glass_background"));
+#endif
+		if (transparent) {
 			window_flags |= DisplayServerEnums::WINDOW_FLAG_TRANSPARENT_BIT;
 		}
 		if (bool(GLOBAL_GET("display/window/size/extend_to_title"))) {
@@ -2731,13 +2736,9 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	}
 
 	OS::get_singleton()->_allow_hidpi = GLOBAL_DEF("display/window/dpi/allow_hidpi", true);
-	OS::get_singleton()->_allow_layered = GLOBAL_DEF_RST("display/window/per_pixel_transparency/allowed",
-#ifdef VISIONOS_ENABLED
-			true
-#else
-			false
-#endif
-	);
+	// visionOS windows show the system glass behind their content.
+	GLOBAL_DEF_RST("display/window/per_pixel_transparency/allowed.visionos", true);
+	OS::get_singleton()->_allow_layered = GLOBAL_DEF_RST("display/window/per_pixel_transparency/allowed", false);
 
 	load_shell_env = GLOBAL_DEF("application/run/load_shell_environment", false);
 

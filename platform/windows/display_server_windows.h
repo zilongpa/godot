@@ -745,7 +745,7 @@ public:
 	virtual Error remove_embedded_process(ProcessID p_pid) override;
 	virtual ProcessID get_focused_process_id() override;
 
-	virtual Error dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback) override;
+	virtual Error dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback, int p_destructive_button = -1, int p_cancel_button = -1) override;
 	virtual Error dialog_input_text(String p_title, String p_description, String p_partial, const Callable &p_callback) override;
 
 	virtual int keyboard_get_layout_count() const override;

@@ -167,7 +167,9 @@ static __weak GDTViewController *_viewController = nil;
 - (void)updateVisionOSFocusAfterSceneChange:(BOOL)p_background {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		OS_AppleEmbedded *os = OS_AppleEmbedded::get_singleton();
-		if (!os) { return; }
+		if (!os) {
+			return;
+		}
 		for (UIScene *connected in UIApplication.sharedApplication.connectedScenes) {
 			if ([connected isKindOfClass:[UIWindowScene class]] && connected.activationState == UISceneActivationStateForegroundActive) {
 				os->on_focus_in();
@@ -184,19 +186,19 @@ static __weak GDTViewController *_viewController = nil;
 #endif
 
 - (void)sceneDidDisconnect:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	#if defined(VISIONOS_ENABLED)
+#if defined(VISIONOS_ENABLED)
 	[self updateVisionOSFocusAfterSceneChange:NO];
-	#else
+#else
 	OS_AppleEmbedded::get_singleton()->on_focus_out();
-	#endif
+#endif
 }
 
 - (void)sceneWillResignActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	#if defined(VISIONOS_ENABLED)
+#if defined(VISIONOS_ENABLED)
 	[self updateVisionOSFocusAfterSceneChange:NO];
-	#else
+#else
 	OS_AppleEmbedded::get_singleton()->on_focus_out();
-	#endif
+#endif
 }
 
 - (void)sceneDidBecomeActive:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
@@ -204,11 +206,11 @@ static __weak GDTViewController *_viewController = nil;
 }
 
 - (void)sceneDidEnterBackground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {
-	#if defined(VISIONOS_ENABLED)
+#if defined(VISIONOS_ENABLED)
 	[self updateVisionOSFocusAfterSceneChange:YES];
-	#else
+#else
 	OS_AppleEmbedded::get_singleton()->on_enter_background();
-	#endif
+#endif
 }
 
 - (void)sceneWillEnterForeground:(UIScene *)scene API_AVAILABLE(ios(13.0), tvos(13.0), visionos(1.0)) {

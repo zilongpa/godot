@@ -2107,7 +2107,10 @@ SceneTree::SceneTree() {
 	const int msaa_mode_3d = GLOBAL_GET("rendering/anti_aliasing/quality/msaa_3d");
 	root->set_msaa_3d(Viewport::MSAA(msaa_mode_3d));
 
-	const bool transparent_background = GLOBAL_DEF("rendering/viewport/transparent_background", false);
+	bool transparent_background = GLOBAL_DEF("rendering/viewport/transparent_background", false);
+#ifdef VISIONOS_ENABLED
+	transparent_background = transparent_background || bool(GLOBAL_GET("display/window/visionos/glass_background"));
+#endif
 	root->set_transparent_background(transparent_background);
 
 	// Enable HDR if requested.

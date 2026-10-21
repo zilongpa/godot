@@ -3673,7 +3673,7 @@ static HRESULT CALLBACK win32_task_dialog_callback(HWND hwnd, UINT msg, WPARAM w
 	return 0;
 }
 
-Error DisplayServerWindows::dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback) {
+Error DisplayServerWindows::dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback, int p_destructive_button, int p_cancel_button) {
 	_THREAD_SAFE_METHOD_
 
 	TASKDIALOGCONFIG config;

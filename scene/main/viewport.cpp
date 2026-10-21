@@ -1091,7 +1091,7 @@ void Viewport::update_canvas_items() {
 		return;
 	}
 
-	if (is_embedding_subwindows()) {
+	if (_is_hosting_subwindows()) {
 		for (Viewport::SubWindow w : gui.sub_windows) {
 			if (w.window && !w.pending_window_update) {
 				w.pending_window_update = true;
@@ -3291,7 +3291,7 @@ void Viewport::_update_mouse_over(const Ref<InputEventMouse> &p_mm) {
 void Viewport::_update_mouse_over(Vector2 p_pos) {
 	gui.last_mouse_pos = p_pos; // Necessary, because mouse cursor can be over Viewports that are not reached by the InputEvent.
 	// Look for embedded windows at mouse position.
-	if (is_embedding_subwindows()) {
+	if (_is_hosting_subwindows()) {
 		for (int i = gui.sub_windows.size() - 1; i >= 0; i--) {
 			Window *sw = gui.sub_windows[i].window;
 			Rect2 swrect = Rect2(sw->get_position(), sw->get_size());
@@ -3535,7 +3535,7 @@ void Viewport::push_input(RequiredParam<InputEvent> rp_event, bool p_local_coord
 		_update_mouse_over(me);
 	}
 
-	if (is_embedding_subwindows() && _sub_windows_forward_input(ev)) {
+	if (_is_hosting_subwindows() && _sub_windows_forward_input(ev)) {
 		set_input_as_handled();
 		return;
 	}
@@ -4342,6 +4342,12 @@ void Viewport::set_embedding_subwindows(bool p_embed) {
 	} else {
 		WARN_PRINT("Can't change \"gui_embed_subwindows\" while a child window is displayed. Consider hiding all child windows before changing this value.");
 	}
+}
+
+bool Viewport::_is_hosting_subwindows() const {
+	// Some windows are embedded even where subwindows are not, such as popups
+	// on visionOS (see Window::get_embedder()).
+	return is_embedding_subwindows() || !gui.sub_windows.is_empty();
 }
 
 bool Viewport::is_embedding_subwindows() const {
@@ -5244,7 +5250,6 @@ void Viewport::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("gui_release_focus"), &Viewport::gui_release_focus);
 	ClassDB::bind_method(D_METHOD("gui_get_focus_owner"), &Viewport::gui_get_focus_owner);
 	ClassDB::bind_method(D_METHOD("gui_get_hovered_control"), &Viewport::gui_get_hovered_control);
-	ClassDB::bind_method(D_METHOD("gui_find_control", "position"), &Viewport::gui_find_control);
 
 	ClassDB::bind_method(D_METHOD("set_disable_input", "disable"), &Viewport::set_disable_input);
 	ClassDB::bind_method(D_METHOD("is_input_disabled"), &Viewport::is_input_disabled);

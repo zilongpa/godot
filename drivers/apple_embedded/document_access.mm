@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  document_access.mm                                                      */
+/*  document_access.mm                                                    */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #import "document_access.h"
+
 #include <stdio.h>
 #include <sys/stat.h>
 
@@ -36,7 +37,9 @@
 + (NSMutableDictionary<NSString *, NSURL *> *)grants {
 	static NSMutableDictionary<NSString *, NSURL *> *grants;
 	static dispatch_once_t once;
-	dispatch_once(&once, ^{ grants = [NSMutableDictionary dictionary]; });
+	dispatch_once(&once, ^{
+		grants = [NSMutableDictionary dictionary];
+	});
 	return grants;
 }
 + (NSURL *)URLForPath:(NSString *)path {
@@ -58,27 +61,36 @@
 }
 + (BOOL)validateURL:(NSURL *)url coordinator:(NSFileCoordinator *)coordinator error:(NSError **)error {
 	if (!url.isFileURL) {
-		if (error) { *error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadUnsupportedSchemeError userInfo:nil]; }
+		if (error) {
+			*error = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadUnsupportedSchemeError userInfo:nil];
+		}
 		return NO;
 	}
 	BOOL scoped = [url startAccessingSecurityScopedResource];
 	__block BOOL readable = NO;
 	__block NSError *readError;
-	[coordinator coordinateReadingItemAtURL:url options:0 error:error byAccessor:^(NSURL *coordinatedURL) {
-		struct stat info;
-		if (stat(coordinatedURL.fileSystemRepresentation, &info) == 0 && S_ISREG(info.st_mode)) {
-			FILE *file = fopen(coordinatedURL.fileSystemRepresentation, "rb");
-			if (file) {
-				readable = YES;
-				fclose(file);
-			}
-		}
-		if (!readable) {
-			readError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoPermissionError userInfo:nil];
-		}
-	}];
-	if (scoped) { [url stopAccessingSecurityScopedResource]; }
-	if (readError && error && !*error) { *error = readError; }
+	[coordinator coordinateReadingItemAtURL:url
+									options:0
+									  error:error
+								 byAccessor:^(NSURL *coordinatedURL) {
+									 struct stat info;
+									 if (stat(coordinatedURL.fileSystemRepresentation, &info) == 0 && S_ISREG(info.st_mode)) {
+										 FILE *file = fopen(coordinatedURL.fileSystemRepresentation, "rb");
+										 if (file) {
+											 readable = YES;
+											 fclose(file);
+										 }
+									 }
+									 if (!readable) {
+										 readError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadNoPermissionError userInfo:nil];
+									 }
+								 }];
+	if (scoped) {
+		[url stopAccessingSecurityScopedResource];
+	}
+	if (readError && error && !*error) {
+		*error = readError;
+	}
 	return readable;
 }
 @end

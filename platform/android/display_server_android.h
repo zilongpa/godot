@@ -127,7 +127,7 @@ public:
 	virtual String clipboard_get() const override;
 	virtual bool clipboard_has() const override;
 
-	virtual Error dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback) override;
+	virtual Error dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback, int p_destructive_button = -1, int p_cancel_button = -1) override;
 	void emit_dialog_callback(int p_button_index);
 
 	virtual Error dialog_input_text(String p_title, String p_description, String p_partial, const Callable &p_callback) override;

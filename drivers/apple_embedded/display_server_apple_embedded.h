@@ -102,6 +102,10 @@ class DisplayServerAppleEmbedded : public DisplayServer {
 		bool transparent = false;
 		bool unresizable = false;
 		String title;
+		int placement = 0;
+		DisplayServerEnums::WindowID placement_target = DisplayServerEnums::MAIN_WINDOW_ID;
+		Vector3 ornament_anchor;
+		int ornament_alignment = 0;
 	};
 	HashMap<DisplayServerEnums::WindowID, SubWindowData> sub_windows;
 	id visionos_scene_disconnect_observer = nil;
@@ -112,6 +116,14 @@ class DisplayServerAppleEmbedded : public DisplayServer {
 	bool main_window_unresizable = false;
 	String main_window_title;
 	Size2i main_window_min_size;
+	// The size last requested for the main window, starting with the project's.
+	Size2i main_window_requested_size;
+	// Whether visionOS is still applying main_window_requested_size.
+	bool main_window_resize_pending = false;
+	// Shows a UIAlertController from the window that can present it.
+	Error _present_alert(id p_alert);
+	// The size a window was last asked to have, as visionOS may still be applying it.
+	Size2i _window_requested_size(DisplayServerEnums::WindowID p_window) const;
 	Size2i main_window_max_size;
 #endif
 
@@ -143,6 +155,10 @@ public:
 
 	// MARK: - Events
 
+#ifdef VISIONOS_ENABLED
+	virtual Error dialog_show(String p_title, String p_description, Vector<String> p_buttons, const Callable &p_callback, int p_destructive_button = -1, int p_cancel_button = -1) override;
+	virtual Error dialog_input_text(String p_title, String p_description, String p_partial, const Callable &p_callback) override;
+#endif
 	virtual Error file_dialog_show(const String &p_title, const String &p_current_directory, const String &p_filename, bool p_show_hidden, DisplayServerEnums::FileDialogMode p_mode, const Vector<String> &p_filters, const Callable &p_callback, DisplayServerEnums::WindowID p_window_id = DisplayServerEnums::MAIN_WINDOW_ID) override;
 	virtual void file_dialog_cancel(const Callable &p_callback) override;
 	virtual void process_events() override;
@@ -209,8 +225,10 @@ public:
 	virtual Vector<DisplayServerEnums::WindowID> get_window_list() const override;
 	virtual DisplayServerEnums::WindowID create_sub_window(DisplayServerEnums::WindowMode p_mode, DisplayServerEnums::VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect = Rect2i(), bool p_exclusive = false, DisplayServerEnums::WindowID p_transient_parent = DisplayServerEnums::INVALID_WINDOW_ID) override;
 	virtual void show_window(DisplayServerEnums::WindowID p_id) override;
+	virtual void window_set_placement(int p_placement, DisplayServerEnums::WindowID p_target, const Vector3 &p_ornament_anchor, int p_ornament_alignment, DisplayServerEnums::WindowID p_window) override;
 	virtual void delete_sub_window(DisplayServerEnums::WindowID p_id) override;
 	virtual DisplayServerEnums::WindowID get_focused_window() const override;
+	virtual int accessibility_screen_reader_active() const override;
 	void focus_visionos_window(DisplayServerEnums::WindowID p_window, bool p_focused);
 
 	virtual DisplayServerEnums::WindowID get_window_at_screen_position(const Point2i &p_position) const override;
@@ -303,7 +321,10 @@ public:
 	void resize_window(CGSize size, DisplayServerEnums::WindowID p_window = DisplayServerEnums::MAIN_WINDOW_ID);
 	void connect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller);
 	void disconnect_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller);
+	// Forgets a controller that is going away, without closing its window.
+	void release_visionos_window(DisplayServerEnums::WindowID p_window, void *p_controller);
 	void disconnect_visionos_scene(void *p_scene);
+	void visionos_window_closed_by_person(DisplayServerEnums::WindowID p_window);
 	virtual void swap_buffers() override {}
 
 	virtual void set_native_icon(const String &p_filename) override;

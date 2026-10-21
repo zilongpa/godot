@@ -749,7 +749,7 @@
 			<param index="3" name="callback" type="Callable" />
 			<description>
 				Shows a text input dialog which uses the operating system's native look-and-feel. [param callback] should accept a single [String] parameter which contains the text field's contents.
-				[b]Note:[/b] This method is implemented if the display server has the [constant FEATURE_NATIVE_DIALOG_INPUT] feature. Supported platforms include macOS, Windows, and Android.
+				[b]Note:[/b] This method is implemented if the display server has the [constant FEATURE_NATIVE_DIALOG_INPUT] feature. Supported platforms include macOS, Windows, Android, and visionOS.
 			</description>
 		</method>
 		<method name="dialog_show">
@@ -758,9 +758,12 @@
 			<param index="1" name="description" type="String" />
 			<param index="2" name="buttons" type="PackedStringArray" />
 			<param index="3" name="callback" type="Callable" />
+			<param index="4" name="destructive_button" type="int" default="-1" />
+			<param index="5" name="cancel_button" type="int" default="-1" />
 			<description>
 				Shows a text dialog which uses the operating system's native look-and-feel. [param callback] should accept a single [int] parameter which corresponds to the index of the pressed button.
-				[b]Note:[/b] This method is implemented if the display server has the [constant FEATURE_NATIVE_DIALOG] feature. Supported platforms include macOS, Windows, and Android.
+				If [param destructive_button] is the index of a button, that button is shown as performing a destructive action, such as deleting data, on platforms that style such buttons (macOS and visionOS). If [param cancel_button] is the index of a button, that button cancels the dialog: visionOS shows it in the system's cancel position, and on macOS the Escape key presses it.
+				[b]Note:[/b] This method is implemented if the display server has the [constant FEATURE_NATIVE_DIALOG] feature. Supported platforms include macOS, Windows, Android, and visionOS.
 			</description>
 		</method>
 		<method name="enable_for_stealing_focus">

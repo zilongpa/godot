@@ -114,6 +114,47 @@ public:
 		WINDOW_INITIAL_POSITION_CENTER_SCREEN_WITH_KEYBOARD_FOCUS,
 	};
 
+	// Initial placement relative to another window, where the platform
+	// arranges windows itself (visionOS). Keep synced with GDTWindowPlacement.
+	enum Placement {
+		PLACEMENT_AUTOMATIC,
+		PLACEMENT_UTILITY_PANEL,
+		PLACEMENT_LEADING,
+		PLACEMENT_TRAILING,
+		PLACEMENT_ABOVE,
+		PLACEMENT_BELOW,
+		// Attached to placement_target as an ornament, moving with it.
+		PLACEMENT_ORNAMENT,
+	};
+
+	// Named points of a window for ornament_anchor, as in SwiftUI's UnitPoint.
+	enum OrnamentAnchorPreset {
+		ORNAMENT_ANCHOR_CUSTOM,
+		ORNAMENT_ANCHOR_TOP_LEADING,
+		ORNAMENT_ANCHOR_TOP,
+		ORNAMENT_ANCHOR_TOP_TRAILING,
+		ORNAMENT_ANCHOR_LEADING,
+		ORNAMENT_ANCHOR_CENTER,
+		ORNAMENT_ANCHOR_TRAILING,
+		ORNAMENT_ANCHOR_BOTTOM_LEADING,
+		ORNAMENT_ANCHOR_BOTTOM,
+		ORNAMENT_ANCHOR_BOTTOM_TRAILING,
+	};
+
+	// Where an ornament's content lies relative to its anchor. Keep synced with GDTOrnamentAlignment.
+	enum OrnamentAlignment {
+		ORNAMENT_ALIGNMENT_AUTOMATIC,
+		ORNAMENT_ALIGNMENT_TOP_LEADING,
+		ORNAMENT_ALIGNMENT_TOP,
+		ORNAMENT_ALIGNMENT_TOP_TRAILING,
+		ORNAMENT_ALIGNMENT_LEADING,
+		ORNAMENT_ALIGNMENT_CENTER,
+		ORNAMENT_ALIGNMENT_TRAILING,
+		ORNAMENT_ALIGNMENT_BOTTOM_LEADING,
+		ORNAMENT_ALIGNMENT_BOTTOM,
+		ORNAMENT_ALIGNMENT_BOTTOM_TRAILING,
+	};
+
 private:
 	DisplayServerEnums::WindowID window_id = DisplayServerEnums::INVALID_WINDOW_ID;
 	bool initialized = false;
@@ -131,6 +172,15 @@ private:
 	bool visible = true;
 	bool focused = false;
 	WindowInitialPosition initial_position = WINDOW_INITIAL_POSITION_ABSOLUTE;
+	Placement placement = PLACEMENT_AUTOMATIC;
+	NodePath placement_target;
+	Vector3 ornament_anchor = Vector3(0.5, 1.0, 1.0);
+	OrnamentAlignment ornament_alignment = ORNAMENT_ALIGNMENT_AUTOMATIC;
+	// Ornaments waiting for, or attached to, this window's native window.
+	LocalVector<ObjectID> ornaments;
+
+	bool _is_ornament() const { return placement == PLACEMENT_ORNAMENT; }
+	Window *_get_placement_target() const;
 	bool force_native = false;
 
 	mutable bool hdr_output_requested = false;
@@ -313,6 +363,17 @@ public:
 
 	void set_initial_position(WindowInitialPosition p_initial_position);
 	WindowInitialPosition get_initial_position() const;
+
+	void set_placement(Placement p_placement);
+	Placement get_placement() const;
+	void set_placement_target(const NodePath &p_target);
+	NodePath get_placement_target() const;
+	void set_ornament_anchor(const Vector3 &p_anchor);
+	Vector3 get_ornament_anchor() const;
+	void set_ornament_anchor_preset(OrnamentAnchorPreset p_preset);
+	OrnamentAnchorPreset get_ornament_anchor_preset() const;
+	void set_ornament_alignment(OrnamentAlignment p_alignment);
+	OrnamentAlignment get_ornament_alignment() const;
 
 	void set_force_native(bool p_force_native);
 	bool get_force_native() const;
@@ -555,3 +616,6 @@ VARIANT_ENUM_CAST(Window::ContentScaleAspect);
 VARIANT_ENUM_CAST(Window::ContentScaleStretch);
 VARIANT_ENUM_CAST(Window::LayoutDirection);
 VARIANT_ENUM_CAST(Window::WindowInitialPosition);
+VARIANT_ENUM_CAST(Window::Placement);
+VARIANT_ENUM_CAST(Window::OrnamentAnchorPreset);
+VARIANT_ENUM_CAST(Window::OrnamentAlignment);
