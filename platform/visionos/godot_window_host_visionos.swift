@@ -449,6 +449,21 @@ private struct GodotVolumetricWindowScene: Scene {
 	}
 }
 
+// MARK: Main window
+
+/// How the main window opens, written to Info.plist on export: visionOS sizes
+/// a window when it opens, so Godot can't resize it afterwards without a jump.
+enum GodotMainWindow {
+	/// The project's window size, in points.
+	static let defaultSize: CGSize = {
+		let info = Bundle.main.infoDictionary?["GodotMainWindow"] as? [String: Any]
+		let width = info?["Width"] as? Double ?? 0
+		let height = info?["Height"] as? Double ?? 0
+		// visionOS's own default.
+		return width > 0 && height > 0 ? CGSize(width: width, height: height) : CGSize(width: 1280, height: 720)
+	}()
+}
+
 /// The main window and the scenes for other Godot windows.
 struct GodotWindowScenes: Scene {
 	private static let plain = GodotWindowSlot.all(.plain)
@@ -461,6 +476,7 @@ struct GodotWindowScenes: Scene {
 				.modifier(GodotOrnamentModifier(windowID: 0, volumetric: false))
 				.modifier(GodotWindowOpener(windowID: 0))
 		}
+		.defaultSize(GodotMainWindow.defaultSize)
 		Group {
 			GodotPlainWindowScene(slot: Self.plain[0])
 			GodotPlainWindowScene(slot: Self.plain[1])

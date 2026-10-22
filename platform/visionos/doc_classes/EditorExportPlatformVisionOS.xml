@@ -119,13 +119,13 @@
 			Environment for Apple Push Notification service. See [url=https://developer.apple.com/documentation/bundleresources/entitlements/aps-environment]aps-environment[/url].
 		</member>
 		<member name="icons/icon_1024x1024" type="String" setter="" getter="">
-			Base application icon used to generate other icons. If left empty, it will fallback to [member ProjectSettings.application/config/icon]. See [url=https://developer.apple.com/design/human-interface-guidelines/foundations/app-icons]App icons[/url].
+			The back layer of the application icon. visionOS shows its icon as layers with depth; the back layer is opaque, and transparent areas are filled with [member ProjectSettings.application/boot_splash/bg_color]. If left empty, it will fallback to [member ProjectSettings.application/config/icon]. See [url=https://developer.apple.com/design/human-interface-guidelines/app-icons]App icons[/url].
 		</member>
-		<member name="icons/icon_1024x1024_dark" type="String" setter="" getter="">
-			Base application icon used to generate other icons, dark version. See [url=https://developer.apple.com/design/human-interface-guidelines/foundations/app-icons]App icons[/url].
+		<member name="icons/icon_1024x1024_front" type="String" setter="" getter="">
+			The front layer of the application icon, drawn over the other layers. Use transparency to show the layers behind it. If left empty, the icon has no front layer.
 		</member>
-		<member name="icons/icon_1024x1024_tinted" type="String" setter="" getter="">
-			Base application icon used to generate other icons, tinted version. See [url=https://developer.apple.com/design/human-interface-guidelines/foundations/app-icons]App icons[/url].
+		<member name="icons/icon_1024x1024_middle" type="String" setter="" getter="">
+			The middle layer of the application icon, between the back and front layers. Use transparency to show the back layer. If left empty, the icon has no middle layer.
 		</member>
 		<member name="modules/camera" type="bool" setter="" getter="">
 			If [code]true[/code], [CameraServer] module is added to the exported project.

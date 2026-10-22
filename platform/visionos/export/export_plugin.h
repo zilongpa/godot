@@ -46,6 +46,7 @@ class EditorExportPlatformVisionOS : public EditorExportPlatformAppleEmbedded {
 	virtual Vector<EditorExportPlatformAppleEmbedded::IconInfo> get_icon_infos() const override;
 
 	virtual void get_export_options(List<ExportOption> *r_options) const override;
+	virtual Error _export_icons(const Ref<EditorExportPreset> &p_preset, const String &p_iconset_dir) override;
 
 	virtual String _process_config_file_line(const Ref<EditorExportPreset> &p_preset, const String &p_line, const AppleEmbeddedConfigData &p_config, bool p_debug, const CodeSigningDetails &p_code_signing) override;
 
