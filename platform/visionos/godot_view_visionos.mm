@@ -49,9 +49,13 @@ GODOT_CLANG_WARNING_POP
 - (void)godot_commonInit {
 	[super godot_commonInit];
 
-	// Enable GamePad handler
+	// Godot reads gamepads through the Game Controller framework. The system
+	// also turns gamepad actions into pinches on what the person looks at, so
+	// keep those coming: otherwise a gamepad, such as a spatial controller,
+	// can't press Godot's controls.
 	GCEventInteraction *gamepadInteraction = [[GCEventInteraction alloc] init];
 	gamepadInteraction.handledEventTypes = GCUIEventTypeGamepad;
+	gamepadInteraction.receivesEventsInView = YES;
 	[self addInteraction:gamepadInteraction];
 }
 
