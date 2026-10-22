@@ -100,6 +100,8 @@ public:
 	virtual void update_set_tooltip(const RID &p_id, const String &p_tooltip) = 0;
 	virtual void update_set_bounds(const RID &p_id, const Rect2 &p_rect) = 0;
 	virtual void update_set_transform(const RID &p_id, const Transform2D &p_transform) = 0;
+	// The radius of the element's rounded corners, for platforms that highlight the element's shape.
+	virtual void update_set_corner_radius(const RID &p_id, float p_radius) {}
 	virtual void update_add_child(const RID &p_id, const RID &p_child_id) = 0;
 	virtual void update_add_related_controls(const RID &p_id, const RID &p_related_id) = 0;
 	virtual void update_add_related_details(const RID &p_id, const RID &p_related_id) = 0;

@@ -176,6 +176,8 @@ void Button::_notification(int p_what) {
 			if (dlg && dlg->get_ok_button() == this) {
 				AccessibilityServer::get_singleton()->update_set_role(ae, AccessibilityServerEnums::AccessibilityRole::ROLE_DEFAULT_BUTTON);
 			}
+
+			_accessibility_set_shape(ae, theme_cache.normal);
 		} break;
 
 		case NOTIFICATION_LAYOUT_DIRECTION_CHANGED: {
@@ -197,6 +199,7 @@ void Button::_notification(int p_what) {
 
 			update_minimum_size();
 			queue_redraw();
+			queue_accessibility_update();
 		} break;
 
 		case NOTIFICATION_RESIZED: {

@@ -241,6 +241,14 @@
 				Sets element color value.
 			</description>
 		</method>
+		<method name="update_set_corner_radius">
+			<return type="void" />
+			<param index="0" name="id" type="RID" />
+			<param index="1" name="radius" type="float" />
+			<description>
+				Sets the radius of the element's rounded corners, in the same units as its bounds, so platforms that highlight an element can follow its visible shape. On visionOS, the highlight shown where the person looks takes this shape. A negative radius leaves the shape to the platform.
+			</description>
+		</method>
 		<method name="update_set_description">
 			<return type="void" />
 			<param index="0" name="id" type="RID" />

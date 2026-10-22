@@ -410,6 +410,10 @@ private:
 	static int root_layout_direction;
 
 protected:
+	// Tells platforms that highlight controls the shape this control is drawn
+	// with: the rounded corners of p_style, if it is a StyleBoxFlat.
+	void _accessibility_set_shape(const RID &p_element, const Ref<StyleBox> &p_style) const;
+
 	// Dynamic properties.
 
 	bool _set(const StringName &p_name, const Variant &p_value);

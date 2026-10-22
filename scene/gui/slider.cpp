@@ -248,11 +248,13 @@ void Slider::_notification(int p_what) {
 			ERR_FAIL_COND(ae.is_null());
 
 			AccessibilityServer::get_singleton()->update_set_role(ae, AccessibilityServerEnums::AccessibilityRole::ROLE_SLIDER);
+			_accessibility_set_shape(ae, theme_cache.slider_style);
 		} break;
 
 		case NOTIFICATION_THEME_CHANGED: {
 			update_minimum_size();
 			queue_redraw();
+			queue_accessibility_update();
 		} break;
 
 		case NOTIFICATION_MOUSE_ENTER: {

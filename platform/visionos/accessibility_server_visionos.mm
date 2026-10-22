@@ -34,10 +34,20 @@
 
 #import <UIKit/UIKit.h>
 
-// Native hover regions of one window's Godot view, in the view's pixels.
+// One hover region, in the view's pixels.
+@interface GDTHoverTarget : NSObject
+@property(nonatomic) CGRect frame;
+// Negative when the control doesn't say; the region then gets small rounded corners.
+@property(nonatomic) CGFloat cornerRadius;
+@end
+
+@implementation GDTHoverTarget
+@end
+
+// Native hover regions of one window's Godot view.
 @interface GDTHoverHost : NSObject
 @property(nonatomic, weak) UIView *view;
-- (void)updateTargets:(NSDictionary<NSNumber *, NSValue *> *)targets;
+- (void)updateTargets:(NSDictionary<NSNumber *, GDTHoverTarget *> *)targets;
 - (void)removeAll;
 @end
 
@@ -45,6 +55,8 @@
 	NSMutableDictionary<NSNumber *, UIHoverEffectLayer *> *_layers;
 	// The shape each hover layer highlights; UIHoverEffectLayer adds sublayers of its own.
 	NSMutableDictionary<NSNumber *, CAShapeLayer *> *_shapes;
+	// The corner radius each layer's shape was made with.
+	NSMutableDictionary<NSNumber *, NSNumber *> *_radii;
 }
 
 - (instancetype)init {
@@ -52,11 +64,12 @@
 	if (self) {
 		_layers = [NSMutableDictionary dictionary];
 		_shapes = [NSMutableDictionary dictionary];
+		_radii = [NSMutableDictionary dictionary];
 	}
 	return self;
 }
 
-- (void)updateTargets:(NSDictionary<NSNumber *, NSValue *> *)targets {
+- (void)updateTargets:(NSDictionary<NSNumber *, GDTHoverTarget *> *)targets {
 	UIView *view = self.view;
 	if (!view) {
 		[self removeAll];
@@ -73,14 +86,22 @@
 			[_layers[key] removeFromSuperlayer];
 			[_layers removeObjectForKey:key];
 			[_shapes removeObjectForKey:key];
+			[_radii removeObjectForKey:key];
 		}
 	}
-	[targets enumerateKeysAndObjectsUsingBlock:^(NSNumber *key, NSValue *value, BOOL *stop) {
-		const CGRect pixels = value.CGRectValue;
+	[targets enumerateKeysAndObjectsUsingBlock:^(NSNumber *key, GDTHoverTarget *target, BOOL *stop) {
+		const CGRect pixels = target.frame;
 		const CGRect frame = CGRectMake(pixels.origin.x / scale, pixels.origin.y / scale, pixels.size.width / scale, pixels.size.height / scale);
+		// The control's own corners, as far as its size allows.
+		const CGFloat half = MIN(frame.size.width, frame.size.height) / 2.0;
+		const CGFloat radius = target.cornerRadius < 0 ? MIN(8.0, half) : MIN(target.cornerRadius / scale, half);
 		UIHoverEffectLayer *layer = self->_layers[key];
+		if (layer && self->_radii[key].doubleValue != radius) {
+			[layer removeFromSuperlayer];
+			layer = nil;
+		}
 		if (!layer) {
-			UIShape *shape = [UIShape rectShapeWithCornerRadius:MIN(8.0, MIN(frame.size.width, frame.size.height) / 2.0)];
+			UIShape *shape = [UIShape rectShapeWithCornerRadius:radius];
 			layer = [[UIHoverEffectLayer alloc] initWithContainerView:view style:[UIHoverStyle styleWithEffect:[UIHoverHighlightEffect effect] shape:shape]];
 			// The effect applies to the layer's content; a faint fill supplies it
 			// without copying Godot's rendering.
@@ -90,12 +111,14 @@
 			[view.layer addSublayer:layer];
 			self->_layers[key] = layer;
 			self->_shapes[key] = content;
+			self->_radii[key] = @(radius);
+			layer.frame = CGRectZero;
 		}
 		if (!CGRectEqualToRect(layer.frame, frame)) {
 			layer.frame = frame;
 			CAShapeLayer *content = self->_shapes[key];
 			content.frame = layer.bounds;
-			content.path = [UIBezierPath bezierPathWithRoundedRect:layer.bounds cornerRadius:MIN(8.0, MIN(frame.size.width, frame.size.height) / 2.0)].CGPath;
+			content.path = [UIBezierPath bezierPathWithRoundedRect:layer.bounds cornerRadius:radius].CGPath;
 		}
 	}];
 }
@@ -106,6 +129,7 @@
 	}
 	[_layers removeAllObjects];
 	[_shapes removeAllObjects];
+	[_radii removeAllObjects];
 }
 
 @end
@@ -264,6 +288,12 @@ void AccessibilityServerVisionOS::update_set_bounds(const RID &p_id, const Rect2
 	}
 }
 
+void AccessibilityServerVisionOS::update_set_corner_radius(const RID &p_id, float p_radius) {
+	if (Element *element = _describe(p_id)) {
+		element->corner_radius = p_radius;
+	}
+}
+
 void AccessibilityServerVisionOS::update_set_transform(const RID &p_id, const Transform2D &p_transform) {
 	if (Element *element = _describe(p_id)) {
 		element->transform = p_transform;
@@ -328,12 +358,14 @@ void AccessibilityServerVisionOS::_collect_targets(const RID &p_id, const Transf
 	if (!p_root && is_window) {
 		// An embedded window draws over the controls of the window it is in.
 		window = p_id.get_id();
-		r_windows.push_back({ window, rect, p_window });
+		r_windows.push_back({ window, rect, -1, p_window });
 	}
 	if (_is_interactive(element->role) && !element->disabled) {
 		const Rect2 visible = rect.intersection(p_clip);
 		if (visible.has_area()) {
-			r_targets.push_back({ p_id.get_id(), visible, window });
+			// The radius is in the element's units; scale it as its bounds are.
+			const float radius = element->corner_radius < 0 ? -1 : element->corner_radius * transform.get_scale().x;
+			r_targets.push_back({ p_id.get_id(), visible, radius, window });
 		}
 	}
 	for (const RID &child : element->children) {
@@ -370,7 +402,7 @@ void AccessibilityServerVisionOS::_sync_hover(DisplayServerEnums::WindowID p_win
 	_collect_targets(*root, Transform2D(), everything, 0, true, collected, windows);
 
 	// Drop targets an embedded window covers: an open menu takes the gaze.
-	HashMap<uint64_t, Rect2> targets;
+	HashMap<uint64_t, Target> targets;
 	for (const Target &target : collected) {
 		bool covered = false;
 		for (const Target &window : windows) {
@@ -380,13 +412,17 @@ void AccessibilityServerVisionOS::_sync_hover(DisplayServerEnums::WindowID p_win
 			}
 		}
 		if (!covered) {
-			targets[target.id] = target.rect;
+			targets[target.id] = target;
 		}
 	}
 
-	NSMutableDictionary<NSNumber *, NSValue *> *rects = [NSMutableDictionary dictionaryWithCapacity:targets.size()];
-	for (const KeyValue<uint64_t, Rect2> &target : targets) {
-		rects[@(target.key)] = [NSValue valueWithCGRect:CGRectMake(target.value.position.x, target.value.position.y, target.value.size.x, target.value.size.y)];
+	NSMutableDictionary<NSNumber *, GDTHoverTarget *> *hover = [NSMutableDictionary dictionaryWithCapacity:targets.size()];
+	for (const KeyValue<uint64_t, Target> &target : targets) {
+		const Rect2 &rect = target.value.rect;
+		GDTHoverTarget *entry = [GDTHoverTarget new];
+		entry.frame = CGRectMake(rect.position.x, rect.position.y, rect.size.x, rect.size.y);
+		entry.cornerRadius = target.value.corner_radius;
+		hover[@(target.key)] = entry;
 	}
-	[host updateTargets:rects];
+	[host updateTargets:hover];
 }

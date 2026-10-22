@@ -50,6 +50,8 @@ class AccessibilityServerVisionOS : public AccessibilityServerDummy {
 		AccessibilityServerEnums::AccessibilityRole role = AccessibilityServerEnums::ROLE_UNKNOWN;
 		Rect2 bounds;
 		Transform2D transform;
+		// Negative when the element doesn't say.
+		float corner_radius = -1;
 		bool hidden = false;
 		bool disabled = false;
 		bool clips_children = false;
@@ -68,6 +70,7 @@ class AccessibilityServerVisionOS : public AccessibilityServerDummy {
 	struct Target {
 		uint64_t id = 0;
 		Rect2 rect;
+		float corner_radius = -1;
 		// The embedded window (popup or subwindow) the target is in, if any.
 		uint64_t window = 0;
 	};
@@ -96,6 +99,7 @@ public:
 
 	virtual void update_set_role(const RID &p_id, AccessibilityServerEnums::AccessibilityRole p_role) override;
 	virtual void update_set_bounds(const RID &p_id, const Rect2 &p_rect) override;
+	virtual void update_set_corner_radius(const RID &p_id, float p_radius) override;
 	virtual void update_set_transform(const RID &p_id, const Transform2D &p_transform) override;
 	virtual void update_add_child(const RID &p_id, const RID &p_child_id) override;
 	virtual void update_set_flag(const RID &p_id, AccessibilityServerEnums::AccessibilityFlags p_flag, bool p_value) override;

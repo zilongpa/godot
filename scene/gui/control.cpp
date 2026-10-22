@@ -46,6 +46,7 @@ STATIC_ASSERT_INCOMPLETE_TYPE(class, RenderingServer);
 #include "scene/main/canvas_layer.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/window.h"
+#include "scene/resources/style_box_flat.h"
 #include "scene/theme/theme_db.h"
 #include "scene/theme/theme_owner.h"
 #include "servers/display/accessibility_server.h"
@@ -4289,6 +4290,18 @@ void Control::_accessibility_action_scroll_into_view(const Variant &p_data) {
 	if (sc) {
 		sc->ensure_control_visible(this);
 	}
+}
+
+void Control::_accessibility_set_shape(const RID &p_element, const Ref<StyleBox> &p_style) const {
+	Ref<StyleBoxFlat> style = p_style;
+	if (style.is_null()) {
+		return;
+	}
+	int radius = 0;
+	for (int corner = 0; corner < 4; corner++) {
+		radius = MAX(radius, style->get_corner_radius((Corner)corner));
+	}
+	AccessibilityServer::get_singleton()->update_set_corner_radius(p_element, radius);
 }
 
 void Control::_notification(int p_notification) {

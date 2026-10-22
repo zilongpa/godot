@@ -264,6 +264,11 @@ void ScrollBar::_notification(int p_what) {
 			ERR_FAIL_COND(ae.is_null());
 
 			AccessibilityServer::get_singleton()->update_set_role(ae, AccessibilityServerEnums::AccessibilityRole::ROLE_SCROLL_BAR);
+			_accessibility_set_shape(ae, theme_cache.scroll_style);
+		} break;
+
+		case NOTIFICATION_THEME_CHANGED: {
+			queue_accessibility_update();
 		} break;
 
 		case NOTIFICATION_DRAW: {
