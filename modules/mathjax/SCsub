@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+Import("env_modules")
+
+import mathjax_builders
+
+env_mathjax = env_modules.Clone()
+
+# Thirdparty source files
+
+thirdparty_obj = []
+
+thirdparty_dir = "#thirdparty/quickjs/"
+thirdparty_sources = [
+    "dtoa.c",
+    "libregexp.c",
+    "libunicode.c",
+    "quickjs.c",
+]
+thirdparty_sources = [thirdparty_dir + file for file in thirdparty_sources]
+
+env_mathjax.Prepend(CPPPATH=[thirdparty_dir])
+
+env_thirdparty = env_mathjax.Clone()
+env_thirdparty.disable_warnings()
+env_thirdparty.Append(CPPDEFINES=["_GNU_SOURCE"])
+if env["platform"] == "windows":
+    env_thirdparty.Append(CPPDEFINES=["WIN32_LEAN_AND_MEAN", ("_WIN32_WINNT", "0x0601")])
+    if env.msvc:
+        env_thirdparty.Append(CFLAGS=["/experimental:c11atomics"])
+env_thirdparty.add_source_files(thirdparty_obj, thirdparty_sources)
+env.modules_sources += thirdparty_obj
+
+# Godot source files
+
+module_obj = []
+
+env_mathjax.CommandNoCache(
+    "tex2svg.gen.h",
+    "#thirdparty/mathjax/tex2svg.js",
+    env.Run(mathjax_builders.make_script_header),
+)
+
+env_mathjax.add_source_files(module_obj, "*.cpp")
+env.modules_sources += module_obj
+
+# Needed to force rebuilding the module files when the thirdparty library is updated.
+env.Depends(module_obj, thirdparty_obj)

@@ -680,6 +680,22 @@ File extracted from upstream source:
 - `AUTHORS`, `LICENSE`
 
 
+## mathjax
+
+- Upstream: https://github.com/mathjax/MathJax-src
+- Version: 3.2.2 (2022)
+- License: Apache-2.0
+
+Files extracted from upstream source:
+
+- `LICENSE`
+
+`tex2svg.js` is MathJax bundled into one script that sets a global
+`tex2svg(tex, display)` function, from `build/src/tex2svg.js`. To rebuild it
+with Node.js: `cd build && npm install && npm run build`, which takes
+`mathjax-full` 3.2.2 from npm, then copy `build/out/tex2svg.js` here.
+
+
 ## mbedtls
 
 - Upstream: https://github.com/Mbed-TLS/mbedtls
@@ -947,6 +963,21 @@ Files extracted from upstream source:
 
 - `Recast/` folder without `CMakeLists.txt`
 - `License.txt`
+
+
+## quickjs
+
+- Upstream: https://github.com/quickjs-ng/quickjs
+- Version: git (7a23d8e3fedb010070ef1a03873c55500c7aa1a9, 2026)
+- License: MIT
+
+Files extracted from upstream source:
+
+- `quickjs.c`, `quickjs.h`, `quickjs-atom.h`, `quickjs-opcode.h`, `quickjs-c-atomics.h`
+- `dtoa.c`, `dtoa.h`, `libregexp.c`, `libregexp.h`, `libregexp-opcode.h`
+- `libunicode.c`, `libunicode.h`, `libunicode-table.h`
+- `cutils.h`, `list.h`, `builtin-*.h`
+- `LICENSE`
 
 
 ## re-spirv

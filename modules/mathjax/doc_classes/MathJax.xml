@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="MathJax" inherits="Object" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Typesets TeX formulas as SVG.
+	</brief_description>
+	<description>
+		[MathJax] turns TeX math, such as [code]\frac{a}{b}[/code], into an SVG image with the MathJax library, which runs in a JavaScript interpreter inside the engine. No browser or network is needed, and the result is the same on every platform.
+		The SVG draws with [code]currentColor[/code], which becomes the text's color when replaced, and gives its size in [code]ex[/code] units, so it scales with the font it goes with. A [code]vertical-align[/code] style tells how far the formula's baseline is below its bottom.
+		[codeblock]
+		var svg := MathJax.tex_to_svg("E = mc^2")
+		if svg.is_empty():
+		    print(MathJax.get_error_message())
+		else:
+		    var texture := ImageTexture.create_from_image(Image.load_svg_from_string(svg))
+		[/codeblock]
+		MathJax loads the first time a formula is set, which takes a moment; each formula after that takes a few milliseconds.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_error_message" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns what went wrong in the last [method tex_to_svg] call, such as [code]Missing close brace[/code], or an empty string if it succeeded.
+			</description>
+		</method>
+		<method name="tex_to_svg">
+			<return type="String" />
+			<param index="0" name="tex" type="String" />
+			<param index="1" name="display" type="bool" default="false" />
+			<description>
+				Returns an SVG image of the TeX math in [param tex], or an empty string if it couldn't be typeset; [method get_error_message] then tells why. With [param display] true, the formula is set on a line of its own, like [code]$$...$$[/code] in LaTeX: larger operators, with their limits above and below. Otherwise it's set to sit inside a line of text.
+				All of MathJax's TeX packages are available, including [code]ams[/code], [code]physics[/code], [code]mhchem[/code] and [code]cancel[/code].
+			</description>
+		</method>
+	</methods>
+</class>
